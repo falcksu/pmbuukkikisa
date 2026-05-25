@@ -502,7 +502,7 @@ input { font: inherit; color: inherit; }
 
 .hdr {
   display: grid;
-  grid-template-columns: 200px 1fr auto;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 32px;
   padding: 14px 0 18px;

@@ -121,10 +121,6 @@ function LoginScreen({ onLogin, existingPlayers }) {
 
       <div className="login-stage">
         <aside className="login-side">
-          <div className="login-logo">
-            <image-slot id="login-logo" shape="rect" radius="0" placeholder="Logoslot"></image-slot>
-          </div>
-
           <div className="login-tag">
             <span className="bolt">⚡</span> MYYJÄTERMINAALI
             <span className="dot-live" /> ONLINE
@@ -256,8 +252,7 @@ function Header({ me, onLogout, playerCount, isAdmin, today, dbBackend }) {
   const total = COMPETITION.totalDays;
   return (
     <header className="hdr">
-      <div className="hdr-logo">
-        <image-slot id="logo-main" shape="rect" radius="0" placeholder="Logoslot"></image-slot>
+      <div className="hdr-logo" style={{display:'none'}}>
       </div>
       <div className="hdr-title">
         <div className="display competition">
@@ -465,7 +460,7 @@ function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete }
       </div>
       <div className="stat-cell col-luurit">
         <div className="v">{p.luurit}</div>
-        <div className="pct">LUURIT</div>
+        <div className="pct">LUURIN NOSTO</div>
       </div>
       <div className="stat-cell col-vastatut">
         <div className="v">{p.vastatut}</div>
@@ -513,7 +508,7 @@ function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete }) {
       <div className="table-head">
         <div className="num">SIJA</div>
         <div>PELAAJA</div>
-        <div className="num">LUURIT</div>
+        <div className="num">LUURIN NOSTO</div>
         <div className="num">VASTATUT</div>
         <div className="num">BUUKIT · PTS</div>
         <div className="ctr">PUTKI</div>
@@ -1020,7 +1015,7 @@ function PlayerModal({ player, onClose, onAction, isMe, isAdmin, onDelete }) {
         {isMe ? (
           <div className="m-foot">
             <button className="alt" onClick={onClose}>SULJE</button>
-            <button onClick={() => { onAction('luuri'); onClose(); }}>+ LUURI</button>
+            <button onClick={() => { onAction('luuri'); onClose(); }}>+ LUURIN NOSTO</button>
             <button onClick={() => { onAction('vastattu'); onClose(); }} disabled={player.vastatut >= player.luurit}>+ VASTATTU</button>
             <button onClick={() => { onAction('buukki'); onClose(); }} disabled={player.buukit >= player.vastatut}>+ BUUKKI</button>
             <button className="danger" onClick={() => { onAction('-buukki'); onClose(); }} disabled={player.buukit <= 0}>− BUUKKI</button>
