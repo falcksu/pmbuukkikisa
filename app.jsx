@@ -1090,6 +1090,210 @@ function TweaksUI({ t, setTweak, onResetAll, isAdmin }) {
   );
 }
 
+// ── DailyReport ───────────────────────────
+
+function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
+  const days = COMPETITION.weekdays;
+  const todayIdx = Math.max(0, currentWeekdayIndex() >= 0 ? currentWeekdayIndex() : 0);
+  const [selIdx, setSelIdx] = useState(todayIdx);
+  const [form, setForm] = useState({ luurit: 0, vastatut: 0, buukit: 0 });
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const dateKey = weekdayIndexToDateKey(selIdx);
+
+  // Admin: group daily_stats by date, then by player
+  const allPlayers = players;
+
+  // Load form when day changes (player view)
+  useEffect(() => {
+    if (isAdmin) return;
+    const row = dailyStats.find(r => r.player_id === currentKey && r.date_key === dateKey);
+    setForm(row ? { luurit: row.luurit||0, vastatut: row.vastatut||0, buukit: row.buukit||0 } : { luurit:0, vastatut:0, buukit:0 });
+  }, [selIdx, dailyStats, currentKey, dateKey, isAdmin]);
+
+  const adj = (field, delta) => setForm(prev => {
+    const next = { ...prev, [field]: Math.max(0, (prev[field]||0) + delta) };
+    if (field === 'buukit' && next.buukit > next.vastatut) next.buukit = next.vastatut;
+    if (field === 'vastatut' && next.vastatut > next.luurit) next.vastatut = next.luurit;
+    return next;
+  });
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSaveDay(dateKey, form);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const vstPct = form.luurit > 0 ? Math.round(form.vastatut/form.luurit*100) : 0;
+  const bkPct  = form.vastatut > 0 ? Math.round(form.buukit/form.vastatut*100) : 0;
+
+  return (
+    <div className="daily-report">
+      <div className="dr-header">
+        <div className="dr-title">PÄIVÄRAPORTTI</div>
+        {isAdmin && <div className="dr-sub">Admin — kaikkien pelaajien päiväkohtaiset tilastot</div>}
+        {!isAdmin && <div className="dr-sub">Syötä päivän tilastosi — tallennus päivittää sarjataulukon</div>}
+      </div>
+
+      {/* Day selector */}
+      <div className="dr-days">
+        {days.map((d, i) => (
+          <button
+            key={i}
+            className={cls('dr-day-btn', i === selIdx && 'active', i === todayIdx && 'today-mark')}
+            onClick={() => setSelIdx(i)}
+          >
+            <span className="wd">{d.wd}</span>
+            <span className="dt">{d.date}</span>
+          </button>
+        ))}
+      </div>
+
+      {isAdmin ? (
+        /* Admin table */
+        <div className="dr-admin-table-wrap">
+          <table className="dr-admin-table">
+            <thead>
+              <tr>
+                <th>PELAAJA</th>
+                {days.map((d,i) => <th key={i} className={i===selIdx?'sel-col':''}>{d.wd}<br/><span style={{fontSize:10,fontWeight:400}}>{d.date}</span></th>)}
+                <th>YHT.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allPlayers.map(p => {
+                const myRows = dailyStats.filter(r => r.player_id === p.key);
+                const total = myRows.reduce((acc,r) => acc+r.buukit,0);
+                return (
+                  <tr key={p.key}>
+                    <td className="player-cell">
+                      <span className="init-badge" style={{background:'var(--red)',color:'#fff',padding:'1px 5px',fontSize:11,fontWeight:700,borderRadius:2,marginRight:5}}>{p.init}</span>
+                      {p.nick}<span style={{color:'var(--ink-3)',fontSize:11,marginLeft:4}}>{p.city}</span>
+                    </td>
+                    {days.map((d,i) => {
+                      const dk = weekdayIndexToDateKey(i);
+                      const row = myRows.find(r => r.date_key === dk);
+                      const b = row ? row.buukit : 0;
+                      const l = row ? row.luurit : 0;
+                      const v = row ? row.vastatut : 0;
+                      return (
+                        <td key={i} className={cls('stat-cell', i===selIdx&&'sel-col', b>0&&'has-data')}>
+                          {l>0||v>0||b>0 ? (
+                            <div className="day-cell-data">
+                              <div className="day-luuri">L:{l}</div>
+                              <div className="day-vast">V:{v}</div>
+                              <div className="day-book">{b}bk</div>
+                            </div>
+                          ) : <span style={{color:'var(--ink-4)'}}>—</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="total-cell">{total}</td>
+                  </tr>
+                );
+              })}
+              {/* Totals row */}
+              <tr className="totals-row">
+                <td>YHTEENSÄ</td>
+                {days.map((d,i) => {
+                  const dk = weekdayIndexToDateKey(i);
+                  const total = dailyStats.filter(r=>r.date_key===dk).reduce((acc,r)=>acc+r.buukit,0);
+                  return <td key={i} className={cls(i===selIdx&&'sel-col')}>{total>0?total:'—'}</td>;
+                })}
+                <td>{dailyStats.reduce((acc,r)=>acc+r.buukit,0)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        /* Player entry form */
+        <div className="dr-form">
+          <div className="dr-form-title">
+            {days[selIdx]?.wd} {days[selIdx]?.date} — SYÖTÄ TILASTOT
+          </div>
+          {[
+            { key: 'luurit',   label: 'LUURIN NOSTOT',  max: null },
+            { key: 'vastatut', label: 'VASTATUT PUHELUT', max: form.luurit },
+            { key: 'buukit',   label: 'BUUKIT',          max: form.vastatut },
+          ].map(({ key, label, max }) => (
+            <div className="dr-row" key={key}>
+              <div className="dr-label">{label}</div>
+              <div className="dr-ctrl">
+                <button className="dr-btn minus" onClick={() => adj(key, -1)}>−</button>
+                <span className="dr-val">{form[key]}</span>
+                <button className="dr-btn plus" onClick={() => adj(key, 1)}>+</button>
+              </div>
+              {key === 'vastatut' && <div className="dr-pct">Vastaus % {vstPct}%</div>}
+              {key === 'buukit'   && <div className="dr-pct">Buukki % {bkPct}%</div>}
+            </div>
+          ))}
+          <button
+            className={cls('dr-save-btn', saving && 'saving', saved && 'saved-ok')}
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? 'TALLENNETAAN...' : saved ? '✓ TALLENNETTU' : 'TALLENNA PÄIVÄ'}
+          </button>
+          <div className="dr-hint">Sama yhdistelmä korvaa aiemman syötön. Sarjataulukko päivittyy heti.</div>
+        </div>
+      )}
+
+      {/* Own summary table for non-admin */}
+      {!isAdmin && (
+        <div className="dr-summary">
+          <div className="dr-sum-title">OMA YHTEENVETO</div>
+          <table className="dr-sum-table">
+            <thead><tr><th>Päivä</th><th>Luurit</th><th>Vastatut</th><th>Buukit</th><th>Vast%</th><th>Buuk%</th></tr></thead>
+            <tbody>
+              {days.map((d, i) => {
+                const dk = weekdayIndexToDateKey(i);
+                const row = dailyStats.find(r => r.player_id === currentKey && r.date_key === dk);
+                if (!row && i > todayIdx) return null;
+                const l = row?.luurit||0, v = row?.vastatut||0, b = row?.buukit||0;
+                return (
+                  <tr key={i} className={cls(i===selIdx&&'sel-row', i===todayIdx&&'today-row')}>
+                    <td>{d.wd} {d.date}</td>
+                    <td>{l||'—'}</td>
+                    <td>{v||'—'}</td>
+                    <td style={{fontWeight:b>0?700:400,color:b>0?'var(--red)':'inherit'}}>{b||'—'}</td>
+                    <td>{l>0?Math.round(v/l*100)+'%':'—'}</td>
+                    <td>{v>0?Math.round(b/v*100)+'%':'—'}</td>
+                  </tr>
+                );
+              }).filter(Boolean)}
+              <tr className="sum-total">
+                <td>YHTEENSÄ</td>
+                {['luurit','vastatut','buukit'].map(f => (
+                  <td key={f}>{dailyStats.filter(r=>r.player_id===currentKey).reduce((acc,r)=>acc+(r[f]||0),0)}</td>
+                ))}
+                <td colSpan={2}></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tab nav ───────────────────────────
+
+function TabNav({ active, onChange }) {
+  return (
+    <div className="tab-nav">
+      <button className={cls('tab-btn', active === 'leaderboard' && 'active')} onClick={() => onChange('leaderboard')}>
+        ⚡ SARJATAULUKKO
+      </button>
+      <button className={cls('tab-btn', active === 'report' && 'active')} onClick={() => onChange('report')}>
+        📊 PÄIVÄRAPORTTI
+      </button>
+    </div>
+  );
+}
+
 // ── App ───────────────────────────
 
 function App() {
@@ -1109,16 +1313,19 @@ function App() {
   const [today, setToday] = useState(() => currentDayNumber());
   const [phase, setPhase] = useState(() => competitionPhase());
   const [playoff, setPlayoff] = useState(() => EMPTY_PLAYOFF);
+  const [dailyStats, setDailyStats] = useState([]);
+  const [activeTab, setActiveTab] = useState('leaderboard');
 
   // DB init + realtime subscribe
   const playersMapRef = useRef({});
   const playoffRef = useRef(EMPTY_PLAYOFF);
   useEffect(() => {
-    let unsubP, unsubPO;
+    let unsubP, unsubPO, unsubD;
     (async () => {
       const initial = await DB.init();
       const players = initial.players || {};
       const po = initial.playoff || EMPTY_PLAYOFF;
+      setDailyStats(initial.daily || []);
       playersMapRef.current = players;
       playoffRef.current = po;
       setPlayersMap(players);
@@ -1133,8 +1340,9 @@ function App() {
         playoffRef.current = next;
         setPlayoff(next);
       });
+      unsubD = DB.subscribeDaily((rows) => setDailyStats(rows));
     })();
-    return () => { if (unsubP) unsubP(); if (unsubPO) unsubPO(); };
+    return () => { if (unsubP) unsubP(); if (unsubPO) unsubPO(); if (unsubD) unsubD(); };
   }, []);
 
   // Phase auto-päivitys (joka 5 min)
@@ -1279,20 +1487,21 @@ function App() {
       } else if (kind === 'buukki') {
         if (cur.buukit >= cur.vastatut) return prev;
         next.buukit = cur.buukit + 1;
+        const slot = Math.max(0, Math.min(4, currentWeekdayIndex() % 5));
         const newLast5 = [...cur.last5];
-        newLast5[newLast5.length - 1] = (newLast5[newLast5.length - 1] || 0) + 1;
+        newLast5[slot] = (newLast5[slot] || 0) + 1;
         next.last5 = newLast5;
-        if (cur.last5[cur.last5.length - 1] === 0) next.streak = cur.streak + 1;
+        if ((cur.last5[slot] || 0) === 0) next.streak = cur.streak + 1;
         next.trendN = Math.max(cur.trendN, 0) + 1;
         resultingNote = `BUUKKI #${next.buukit}`;
       } else if (kind === '-buukki') {
         if (cur.buukit <= 0) return prev;
         next.buukit = cur.buukit - 1;
+        const slot = Math.max(0, Math.min(4, currentWeekdayIndex() % 5));
         const newLast5 = [...cur.last5];
-        const i = newLast5.length - 1;
-        newLast5[i] = Math.max(0, (newLast5[i] || 0) - 1);
+        newLast5[slot] = Math.max(0, (newLast5[slot] || 0) - 1);
         next.last5 = newLast5;
-        if (newLast5[i] === 0 && cur.last5[i] === 1) {
+        if (newLast5[slot] === 0 && (cur.last5[slot] || 0) === 1) {
           next.streak = Math.max(0, cur.streak - 1);
         }
         next.trendN = Math.min(cur.trendN, 0) - 1;
@@ -1316,6 +1525,25 @@ function App() {
 
     // Sync to DB (fire-and-forget)
     if (updatedPlayer) DB.upsertPlayer(updatedPlayer);
+
+    // Also update daily_stats for today (fire-and-forget)
+    const dayIdx2 = currentWeekdayIndex();
+    const dateKey2 = weekdayIndexToDateKey(dayIdx2);
+    if (dateKey2 && dayIdx2 >= 0 && (kind === 'luuri' || kind === 'vastattu' || kind === 'buukki' || kind === '-buukki')) {
+      setDailyStats(prev => {
+        const existing = prev.find(r => r.player_id === currentKey && r.date_key === dateKey2);
+        const ds = existing
+          ? { luurit: existing.luurit, vastatut: existing.vastatut, buukit: existing.buukit }
+          : { luurit: 0, vastatut: 0, buukit: 0 };
+        if (kind === 'luuri')     ds.luurit++;
+        else if (kind === 'vastattu') ds.vastatut++;
+        else if (kind === 'buukki')   ds.buukit++;
+        else if (kind === '-buukki')  ds.buukit = Math.max(0, ds.buukit - 1);
+        const updated = { id: currentKey+'_'+dateKey2, player_id: currentKey, date_key: dateKey2, ...ds };
+        DB.upsertDailyStats(currentKey, dateKey2, ds);
+        return [...prev.filter(r => !(r.player_id === currentKey && r.date_key === dateKey2)), updated];
+      });
+    }
 
     setFlashKey(currentKey);
     setTimeout(() => setFlashKey(null), 900);
@@ -1342,6 +1570,23 @@ function App() {
     }
   }, [currentKey, playersMap, t.confetti]);
 
+  // Tallenna päiväraportti-rivi ja päivitä pelaajan kokonaistilasto
+  const handleSaveDay = useCallback(async (dateKey, stats) => {
+    if (!currentKey || currentKey === ADMIN_KEY) return;
+    await DB.upsertDailyStats(currentKey, dateKey, stats);
+    const updatedDaily = [
+      ...dailyStats.filter(r => !(r.player_id === currentKey && r.date_key === dateKey)),
+      { id: currentKey+'_'+dateKey, player_id: currentKey, date_key: dateKey, ...stats },
+    ];
+    setDailyStats(updatedDaily);
+    const myRows = updatedDaily.filter(r => r.player_id === currentKey);
+    const base = playersMap[currentKey];
+    if (!base) return;
+    const recalced = recalcPlayerFromDailyStats(base, myRows);
+    setPlayersMap(prev => ({ ...prev, [currentKey]: recalced }));
+    DB.upsertPlayer(recalced);
+  }, [currentKey, dailyStats, playersMap]);
+
   // Login gate
   if (!me) {
     return <LoginScreen onLogin={handleLogin} existingPlayers={playersMap} />;
@@ -1357,6 +1602,10 @@ function App() {
         <Header me={me} onLogout={handleLogout} playerCount={sorted.length} isAdmin today={today} dbBackend={dbBackend} />
         {t.showTicker && <Ticker items={tickerItems} paused={!t.pulse} />}
         <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
+        <TabNav active={activeTab} onChange={setActiveTab} />
+        {activeTab === 'report' ? (
+          <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sorted} onSaveDay={handleSaveDay} />
+        ) : (
         <div className="main">
           <div>
             <AdminPanel players={sorted} onDelete={handleDeletePlayer} onResetAll={handleResetAll} />
@@ -1380,6 +1629,7 @@ function App() {
             <PrizeBanner />
           </div>
         </div>
+        )}
         <div className="footer-stripe">
           <div>BUUKKAUSKISA · KAUSI 26 · VOL.&nbsp;I · {sorted.length}&nbsp;PELAAJAA · ADMIN-NÄKYMÄ</div>
           <div>POISTA PELAAJA → ROSKAKORI-IKONI &nbsp;|&nbsp; ADMIN EI NÄY TILASTOISSA</div>
@@ -1402,6 +1652,10 @@ function App() {
       <Header me={me} onLogout={handleLogout} playerCount={sorted.length} today={today} dbBackend={dbBackend} />
       {t.showTicker && <Ticker items={tickerItems} paused={!t.pulse} />}
       <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
+      <TabNav active={activeTab} onChange={setActiveTab} />
+      {activeTab === 'report' ? (
+        <DailyReport currentKey={currentKey} isAdmin={false} dailyStats={dailyStats} players={sorted} onSaveDay={handleSaveDay} />
+      ) : (
       <div className="main">
         <div>
           <MyCard me={me} onAction={performAction} />
@@ -1421,6 +1675,7 @@ function App() {
           <PrizeBanner />
         </div>
       </div>
+      )}
       <div className="footer-stripe">
         <div>BUUKKAUSKISA · KAUSI 26 · VOL.&nbsp;I · {sorted.length}&nbsp;PELAAJAA</div>
         <div>KLIKKAA RIVIÄ → PELAAJAPROFIILI &nbsp;|&nbsp; PELATAAN VAIN ARKIPÄIVISIN</div>

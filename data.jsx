@@ -201,6 +201,41 @@ function currentDayNumber() {
   return idx + 1;
 }
 
+// ── Päivä–avain -konversiot ──────────────────────────────────
+const WEEKDAY_DATE_KEYS = [
+  '2026-05-25', '2026-05-26', '2026-05-27', '2026-05-28', '2026-05-29',
+  '2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04', '2026-06-05',
+];
+function weekdayIndexToDateKey(idx) { return WEEKDAY_DATE_KEYS[idx] ?? null; }
+function dateKeyToWeekdayIndex(key) { return WEEKDAY_DATE_KEYS.indexOf(key); }
+
+// Laskee pelaajan yhteistilastot päiväkohtaisista riveistä
+function recalcPlayerFromDailyStats(player, myRows) {
+  let luurit = 0, vastatut = 0, buukit = 0;
+  myRows.forEach(r => { luurit += (r.luurit||0); vastatut += (r.vastatut||0); buukit += (r.buukit||0); });
+
+  const dayIdx = Math.max(0, Math.min(9, currentWeekdayIndex() >= 0 ? currentWeekdayIndex() : 0));
+  const weekOffset = dayIdx >= 5 ? 5 : 0;
+  const last5 = [0, 0, 0, 0, 0];
+  myRows.forEach(r => {
+    const idx = dateKeyToWeekdayIndex(r.date_key);
+    if (idx >= weekOffset && idx < weekOffset + 5) last5[idx - weekOffset] = (r.buukit || 0);
+  });
+
+  const buuksByDay = {};
+  myRows.forEach(r => { buuksByDay[dateKeyToWeekdayIndex(r.date_key)] = r.buukit || 0; });
+  let streak = 0;
+  for (let i = dayIdx; i >= 0; i--) {
+    if ((buuksByDay[i] || 0) > 0) streak++; else break;
+  }
+
+  const todayB = buuksByDay[dayIdx] || 0;
+  const yesterB = dayIdx > 0 ? (buuksByDay[dayIdx - 1] || 0) : 0;
+  const trendN = todayB - yesterB;
+
+  return { ...player, luurit, vastatut, buukit, last5, streak, trendN };
+}
+
 Object.assign(window, {
   COMPETITION,
   LS_CURRENT,
@@ -210,4 +245,5 @@ Object.assign(window, {
   competitionPhase,
   EMPTY_PLAYOFF, MATCH_ORDER,
   setMatchWinner, clearMatchWinner, startPlayoffs, resetPlayoffs, recomputeAdvancement,
+  WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats,
 });
