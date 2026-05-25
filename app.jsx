@@ -1451,6 +1451,8 @@ function App() {
   }, []);
 
   const handleLogout = useCallback(() => {
+    sessionStorage.removeItem('buukkikisa.pw');
+    setUnlocked(false);
     setCurrentKey(null);
   }, []);
 
