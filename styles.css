@@ -1352,9 +1352,11 @@ input { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  letter-spacing: .14em;
+  font-size: 11px;
+  letter-spacing: .1em;
   color: var(--ink-3);
   text-transform: uppercase;
 }
@@ -1363,11 +1365,12 @@ input { font: inherit; color: inherit; }
 .m-badge {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: .08em;
-  padding: 2px 5px;
+  padding: 2px 6px;
   background: var(--bg-3);
   color: var(--ink-3);
+  white-space: nowrap;
 }
 .m-badge.mb-live   { background: var(--accent); color: #fff; }
 .m-badge.mb-done   { background: var(--green); color: #fff; }
@@ -1395,21 +1398,23 @@ input { font: inherit; color: inherit; }
 .m-card.m-final .m-side.loser  { opacity: .35; }
 .m-seed {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  letter-spacing: .08em;
+  font-size: 11px;
+  letter-spacing: .06em;
   color: var(--accent);
   font-weight: 700;
+  flex-shrink: 0;
 }
 .m-card.m-final .m-seed { color: var(--gold); }
 .m-nick {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 17px;
   letter-spacing: .02em;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 .m-side.winner .m-nick { color: var(--green); }
 .m-card.m-final .m-side.winner .m-nick { color: var(--gold); }
@@ -2246,6 +2251,25 @@ body { font-size: 14px; }
   /* Password gate */
   .pw-box { padding: 36px 24px; }
   .pw-logo { font-size: 32px; }
+
+  /* Bracket / match cards */
+  .bracket-card { padding: 12px; }
+  .m-card { padding: 8px 8px 9px; }
+  .m-nick { font-size: 16px; }
+  .m-seed { font-size: 11px; }
+  .m-badge { font-size: 11px; padding: 2px 5px; }
+  .m-head { font-size: 11px; }
+  .m-side { gap: 6px; padding: 5px 2px; }
+  .m-pick { font-size: 10px; height: 22px; padding: 0 7px; }
+  .bracket-tools .bt-btn { font-size: 13px; padding: 10px 14px; }
+  .col-label { font-size: 10px; }
+
+  /* Rewards / palkinnot */
+  .rewards-card { padding: 14px; }
+  .rewards-card .title { font-size: 24px; }
+  .prize-slots { gap: 6px; }
+  .prize-slot { min-width: 56px; padding: 10px 6px; }
+  .prize-slot .place { font-size: 20px; }
 }
 
 /* ─── Tablet (681–980px) ─────────────────────── */

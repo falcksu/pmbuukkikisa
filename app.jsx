@@ -645,7 +645,6 @@ function MatchCard({
   const status = decided ? 'done' : ready ? 'live' : pending ? 'pending' : 'preview';
 
   const SideRow = ({ side, player, seed, isWinner, isLoser }) => {
-    const placeholder = side === 'home' ? `${matchId} kotijoukkue` : `${matchId} vierasjoukkue`;
     const clickable = !!player && onSelect;
     return (
       <div
@@ -655,7 +654,7 @@ function MatchCard({
       >
         {seed != null && <span className="m-seed">S{seed}</span>}
         <span className="m-nick">
-          {player ? player.nick : (started ? '—' : placeholder)}
+          {player ? player.nick : '—'}
         </span>
         <span className="m-ico">{isWinner ? '✓' : ''}</span>
         {isAdmin && ready && player && (
