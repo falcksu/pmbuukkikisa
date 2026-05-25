@@ -70,7 +70,7 @@ function PasswordGate({ onUnlock }) {
     <div className="pw-gate">
       <div className="pw-box">
         <div className="pw-logo display">Buukkaus<span className="accent">kisa</span></div>
-        <div className="pw-sub">Kausi 26 · Vol. I</div>
+        <div className="pw-sub">Kausi 1 · Vol. I</div>
         <form className="pw-form" onSubmit={handleSubmit}>
           <div className="pw-field-wrap">
             <input
@@ -132,7 +132,7 @@ function LoginScreen({ onLogin, existingPlayers }) {
 
           <h1 className="login-headline">
             Buukkaus<span className="accent">kisa</span>
-            <span className="sub">Kausi 26 · Vol. I</span>
+            <span className="sub">Kausi 1 · Vol. I</span>
           </h1>
 
           <div className="login-pitch">
@@ -263,7 +263,7 @@ function Header({ me, onLogout, playerCount, isAdmin, today, dbBackend }) {
         <div className="display competition">
           BUUKKAUS<span className="accent">KISA</span>
         </div>
-        <div className="edition">— Kausi&nbsp;26 · Vol&nbsp;I · {playerCount}&nbsp;pelaajaa</div>
+        <div className="edition">— Kausi&nbsp;1 · Vol&nbsp;I · {playerCount}&nbsp;pelaajaa</div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
         <div className="hdr-meta">
@@ -348,7 +348,7 @@ function MyCard({ me, onAction }) {
           <div className="mc-avatar">{me.init}</div>
           <div className="mc-id">
             <div className="nick">{me.nick}</div>
-            <div className="city">{me.city.toUpperCase()} · KAUSI 26</div>
+            <div className="city">{me.city.toUpperCase()} · KAUSI 1</div>
           </div>
         </div>
         <div />
@@ -968,7 +968,7 @@ function PlayerModal({ player, onClose, onAction, isMe, isAdmin, onDelete }) {
             <div className="meta">
               {player.city.toUpperCase()}
               {isMe ? ' · SINÄ' : ''}
-              {' · '}KAUSI 26
+              {' · '}KAUSI 1
             </div>
           </div>
           <div className="rank-badge">
@@ -1678,7 +1678,7 @@ function App() {
         </div>
         )}
         <div className="footer-stripe">
-          <div>BUUKKAUSKISA · KAUSI 26 · VOL.&nbsp;I · {sorted.length}&nbsp;PELAAJAA · ADMIN-NÄKYMÄ</div>
+          <div>BUUKKAUSKISA · KAUSI 1 · VOL.&nbsp;I · {sorted.length}&nbsp;PELAAJAA · ADMIN-NÄKYMÄ</div>
           <div>POISTA PELAAJA → ROSKAKORI-IKONI &nbsp;|&nbsp; ADMIN EI NÄY TILASTOISSA</div>
         </div>
         <PlayerModal
@@ -1724,7 +1724,7 @@ function App() {
       </div>
       )}
       <div className="footer-stripe">
-        <div>BUUKKAUSKISA · KAUSI 26 · VOL.&nbsp;I · {sorted.length}&nbsp;PELAAJAA</div>
+        <div>BUUKKAUSKISA · KAUSI 1 · VOL.&nbsp;I · {sorted.length}&nbsp;PELAAJAA</div>
         <div>KLIKKAA RIVIÄ → PELAAJAPROFIILI &nbsp;|&nbsp; PELATAAN VAIN ARKIPÄIVISIN</div>
       </div>
       <PlayerModal
