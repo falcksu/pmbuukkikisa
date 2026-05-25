@@ -51,6 +51,46 @@ function decoratePlayers(map) {
   }));
 }
 
+// ── Password gate ───────────────────────────
+
+function PasswordGate({ onUnlock }) {
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState(false);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (pw.trim().toUpperCase() === 'VENI') {
+      sessionStorage.setItem('buukkikisa.pw', '1');
+      onUnlock();
+    } else {
+      setErr(true);
+      setPw('');
+    }
+  };
+  return (
+    <div className="pw-gate">
+      <div className="pw-box">
+        <div className="pw-logo display">Buukkaus<span className="accent">kisa</span></div>
+        <div className="pw-sub">Kausi 26 · Vol. I</div>
+        <form className="pw-form" onSubmit={handleSubmit}>
+          <div className="pw-field-wrap">
+            <input
+              className={cls('pw-input', err && 'pw-err')}
+              type="password"
+              placeholder=""
+              value={pw}
+              autoFocus
+              autoComplete="off"
+              onChange={(e) => { setPw(e.target.value); setErr(false); }}
+            />
+            {err && <div className="pw-errmsg">Väärä salasana</div>}
+          </div>
+          <button className="pw-btn" type="submit">Kirjaudu sisään →</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Login screen ───────────────────────────
 
 function LoginScreen({ onLogin, existingPlayers }) {
@@ -423,11 +463,11 @@ function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete }
           <div className="city">{p.city.toUpperCase()}</div>
         </div>
       </div>
-      <div className="stat-cell">
+      <div className="stat-cell col-luurit">
         <div className="v">{p.luurit}</div>
         <div className="pct">LUURIT</div>
       </div>
-      <div className="stat-cell">
+      <div className="stat-cell col-vastatut">
         <div className="v">{p.vastatut}</div>
         <div className="pct">{p.vastausPct}% VAST.</div>
       </div>
@@ -435,11 +475,11 @@ function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete }
         <div className="v">{p.buukit}</div>
         <div className="pct">{p.buukkiPct}% BUUK.</div>
       </div>
-      <StreakBar streak={p.streak} />
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
+      <div className="col-streak"><StreakBar streak={p.streak} /></div>
+      <div className="col-trend" style={{ display: 'flex', justifyContent: 'center' }}>
         <TrendCell n={p.trendN} />
       </div>
-      <div className={cls('gap-info', hasEnoughForPlayoff && (p.inPlayoff ? 'good' : 'bad'))}>
+      <div className={cls('gap-info col-gap', hasEnoughForPlayoff && (p.inPlayoff ? 'good' : 'bad'))}>
         {hasEnoughForPlayoff ? (
           p.inPlayoff ? (
             <>
@@ -1298,6 +1338,7 @@ function TabNav({ active, onChange }) {
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('buukkikisa.pw') === '1');
 
   // Persistent state — pelaajat tulee DB:stä (Supabase tai LS fallback)
   const [playersMap, setPlayersMap] = useState({});
@@ -1586,6 +1627,11 @@ function App() {
     setPlayersMap(prev => ({ ...prev, [currentKey]: recalced }));
     DB.upsertPlayer(recalced);
   }, [currentKey, dailyStats, playersMap]);
+
+  // Password gate
+  if (!unlocked) {
+    return <PasswordGate onUnlock={() => setUnlocked(true)} />;
+  }
 
   // Login gate
   if (!me) {

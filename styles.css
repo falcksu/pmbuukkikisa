@@ -2052,3 +2052,210 @@ input { font: inherit; color: inherit; }
 .day-luuri { color:var(--ink-3); font-size:10px; }
 .day-vast { color:var(--ink-3); font-size:10px; }
 .day-book { color:var(--accent); font-weight:700; font-size:11px; }
+
+/* ─── Password gate ─────────────────────── */
+
+.pw-gate {
+  min-height: 100vh;
+  background: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.pw-box {
+  background: var(--card);
+  padding: 48px 40px;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 8px 8px 0 var(--accent);
+  text-align: center;
+}
+.pw-logo {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.pw-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .1em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  margin-bottom: 32px;
+}
+.pw-form { display: flex; flex-direction: column; gap: 12px; }
+.pw-field-wrap { position: relative; }
+.pw-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 20px;
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg-2);
+  border: 1.5px solid var(--line-2);
+  color: var(--ink);
+  letter-spacing: .2em;
+  text-align: center;
+  outline: none;
+  transition: border-color .15s;
+}
+.pw-input:focus { border-color: var(--accent); }
+.pw-input.pw-err { border-color: var(--red); animation: shake .25s ease; }
+.pw-errmsg {
+  position: absolute;
+  bottom: -22px;
+  left: 0; right: 0;
+  font-size: 11px;
+  color: var(--red);
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: .06em;
+}
+.pw-btn {
+  margin-top: 14px;
+  padding: 14px;
+  background: var(--ink);
+  color: #fff;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: background .15s;
+}
+.pw-btn:hover { background: var(--accent); }
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+/* ─── Font size bumps ─────────────────────── */
+
+body { font-size: 14px; }
+
+.row .nick { font-size: 20px; }
+.row .city { font-size: 11px; }
+.row .stat-cell .v { font-size: 24px; }
+.row .stat-cell.points .v { font-size: 28px; }
+.row .stat-cell .pct { font-size: 11px; }
+.row .streak-num { font-size: 16px; }
+.row .trend { font-size: 17px; }
+.row .gap-info { font-size: 11px; }
+.dr-sum-table { font-size: 13px; }
+.dr-sum-table th { font-size: 12px; }
+.dr-admin-table { font-size: 12px; }
+.dr-admin-table th { font-size: 12px; }
+.day-luuri { font-size: 11px; }
+.day-vast { font-size: 11px; }
+.day-book { font-size: 12px; }
+
+/* ─── Mobile (≤ 680px) ─────────────────────── */
+
+@media (max-width: 680px) {
+  /* Base */
+  body { font-size: 14px; }
+
+  /* App padding */
+  .app { padding: 12px 14px 60px; }
+
+  /* Header: stack vertically */
+  .hdr {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 10px;
+    padding: 10px 0 14px;
+  }
+  .hdr-logo { grid-column: 1; }
+  .hdr-meta { grid-column: 2; grid-row: 1 / 3; }
+  .hdr-title { grid-column: 1 / 2; }
+  .hdr-title .competition { font-size: 36px; }
+  .hdr-meta .date { font-size: 20px; }
+  .hdr-meta .progress .day-pip { width: 12px; height: 6px; }
+
+  /* Ticker */
+  .ticker { font-size: 12px; }
+
+  /* Phase bar */
+  .phase-bar { font-size: 11px; padding: 6px 12px; flex-wrap: wrap; gap: 6px; }
+
+  /* Tab nav */
+  .tab-nav { gap: 4px; margin: 10px 0; }
+  .tab-btn { font-size: 12px; padding: 8px 14px; }
+
+  /* Admin card */
+  .admin-card { padding: 16px; }
+  .admin-card .kpi-row { flex-wrap: wrap; gap: 10px; }
+  .admin-card .kpi-block { min-width: 80px; }
+
+  /* Table rows: hide less important columns on narrow screens */
+  .leaderboard-head { display: none; }
+  .row { padding: 12px 8px; gap: 8px; }
+  .row .rank { font-size: 24px; min-width: 28px; }
+  .row.rank-1 .rank { font-size: 30px; }
+  .row .nick { font-size: 17px; }
+  .row .city { font-size: 10px; }
+  .row .avatar { width: 32px; height: 32px; font-size: 11px; }
+  .row .stat-cell .v { font-size: 20px; }
+  .row .stat-cell.points .v { font-size: 24px; }
+  .row .stat-cell .pct { font-size: 10px; }
+  /* Hide streak/trend/gap columns on mobile — show only points + luurit */
+  .col-streak, .col-trend, .col-gap, .col-vastatut { display: none; }
+
+  /* Sparkline bars */
+  .bar-chart { gap: 2px; }
+  .bar-chart .bar-col { width: 12px; }
+
+  /* Podium */
+  .podium { gap: 8px; }
+  .podium .pod { padding: 12px 8px 10px; min-width: 80px; }
+  .podium .pod .pod-nick { font-size: 14px; }
+  .podium .pod .pod-pts { font-size: 22px; }
+
+  /* Modal */
+  .modal-backdrop { padding: 12px; }
+  .modal { max-width: 100%; padding: 20px 16px; }
+
+  /* Login screen */
+  .login-stage {
+    grid-template-columns: 1fr;
+    box-shadow: 6px 6px 0 var(--ink);
+    margin: 12px;
+  }
+  .login-side {
+    padding: 24px 20px 20px;
+  }
+  .login-headline { font-size: 48px; }
+  .login-side::before { font-size: 180px; top: -20px; right: -10px; }
+  .kpi-stripe { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .login-card { padding: 24px 20px; }
+  .login-flow { flex-wrap: wrap; gap: 6px; }
+  .flow-arr { display: none; }
+
+  /* Daily report */
+  .daily-report { padding: 0; }
+  .dr-days { flex-wrap: wrap; gap: 4px; }
+  .dr-day-btn { padding: 6px 10px; font-size: 11px; }
+  .dr-form { padding: 16px; }
+  .dr-admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .dr-admin-table { font-size: 11px; min-width: 700px; }
+  .dr-admin-table th, .dr-admin-table td { padding: 4px 5px; }
+  .dr-sum-table { font-size: 12px; }
+
+  /* Password gate */
+  .pw-box { padding: 36px 24px; }
+  .pw-logo { font-size: 32px; }
+}
+
+/* ─── Tablet (681–980px) ─────────────────────── */
+
+@media (min-width: 681px) and (max-width: 980px) {
+  .app { padding: 14px 20px 80px; }
+  .hdr-title .competition { font-size: 42px; }
+  .row .nick { font-size: 18px; }
+  .row .stat-cell .v { font-size: 22px; }
+  .row .stat-cell.points .v { font-size: 26px; }
+  .dr-admin-table { font-size: 11px; min-width: 700px; }
+  .dr-admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
