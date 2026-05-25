@@ -304,7 +304,9 @@ function Header({ me, onLogout, playerCount, isAdmin, today, dbBackend }) {
 // ── Ticker ───────────────────────────
 
 function Ticker({ items, paused }) {
-  const loop = useMemo(() => [...items, ...items, ...items], [items]);
+  const loop = useMemo(() => [...items, ...items], [items]);
+  // ~6s per item, min 12s, max 90s
+  const dur = Math.min(90, Math.max(12, items.length * 6));
   return (
     <div className="ticker">
       <div className="ticker-tag"><span className="dot" />LIVE</div>
@@ -314,7 +316,7 @@ function Ticker({ items, paused }) {
             Ei vielä toimintaa — kirjaa ensimmäinen buukki kortistasi
           </div>
         ) : (
-          <div className={cls('ticker-content', paused && 'paused')}>
+          <div className={cls('ticker-content', paused && 'paused')} style={{ animationDuration: `${dur}s` }}>
             {loop.map((it, i) => (
               <div className="ticker-item" key={`${it.id}-${i}`}>
                 <span className="t-time">{it.time}</span>
@@ -1622,6 +1624,15 @@ function App() {
     const recalced = recalcPlayerFromDailyStats(base, myRows);
     setPlayersMap(prev => ({ ...prev, [currentKey]: recalced }));
     DB.upsertPlayer(recalced);
+    // Add ticker entries for saved buukkeja
+    if (stats.buukit > 0) {
+      const now = new Date();
+      const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      setTickerItems(items => [
+        { id: `tx-${Date.now()}`, nick: base.nick, time, note: `BUUKKI × ${stats.buukit} (PÄIVÄRAPORTTI)`, accent: true },
+        ...items.slice(0, 24),
+      ]);
+    }
   }, [currentKey, dailyStats, playersMap]);
 
   // Password gate
