@@ -1355,29 +1355,57 @@ function App() {
 
   // DB init + realtime subscribe
   const playersMapRef = useRef({});
-  const playoffRef = useRef(EMPTY_PLAYOFF);
+  const playoffRef    = useRef(EMPTY_PLAYOFF);
+  const dailyRef      = useRef([]);
+
+  function applyDailyToPlayers(rawMap, rows) {
+    const out = {};
+    Object.entries(rawMap).forEach(([key, p]) => {
+      const myRows = rows.filter(r => r.player_id === key);
+      out[key] = myRows.length > 0 ? recalcPlayerFromDailyStats(p, myRows) : p;
+    });
+    return out;
+  }
+
   useEffect(() => {
     let unsubP, unsubPO, unsubD;
     (async () => {
       const initial = await DB.init();
-      const players = initial.players || {};
-      const po = initial.playoff || EMPTY_PLAYOFF;
-      setDailyStats(initial.daily || []);
+      const rawPlayers = initial.players || {};
+      const dailyRows  = initial.daily   || [];
+      const po         = initial.playoff || EMPTY_PLAYOFF;
+
+      // daily_stats is the source of truth — always recalc totals from it
+      const players = applyDailyToPlayers(rawPlayers, dailyRows);
+
+      dailyRef.current      = dailyRows;
       playersMapRef.current = players;
-      playoffRef.current = po;
+      playoffRef.current    = po;
+      setDailyStats(dailyRows);
       setPlayersMap(players);
       setPlayoff(po);
       setDbBackend(DB.backend);
+
+      // Persist corrected totals back to DB
+      Object.values(players).forEach(p => DB.upsertPlayer(p));
+
       unsubP = DB.subscribe((freshMap) => {
-        playersMapRef.current = freshMap;
-        setPlayersMap(freshMap);
+        const recalced = applyDailyToPlayers(freshMap, dailyRef.current);
+        playersMapRef.current = recalced;
+        setPlayersMap(recalced);
       });
       unsubPO = DB.subscribePlayoff((fresh) => {
         const next = fresh || EMPTY_PLAYOFF;
         playoffRef.current = next;
         setPlayoff(next);
       });
-      unsubD = DB.subscribeDaily((rows) => setDailyStats(rows));
+      unsubD = DB.subscribeDaily((rows) => {
+        dailyRef.current = rows;
+        setDailyStats(rows);
+        const recalced = applyDailyToPlayers(playersMapRef.current, rows);
+        playersMapRef.current = recalced;
+        setPlayersMap(recalced);
+      });
     })();
     return () => { if (unsubP) unsubP(); if (unsubPO) unsubPO(); if (unsubD) unsubD(); };
   }, []);
