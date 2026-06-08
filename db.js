@@ -165,6 +165,39 @@
     }
   }
 
+  // ── Playout (meta table) ─────────────────────────
+  const LS_PLAYOUT = 'buukkauskisa.playout.v1';
+  let playoutListeners = [];
+
+  function loadLocalPlayout() {
+    try { const r = localStorage.getItem(LS_PLAYOUT); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+  }
+  function saveLocalPlayout(state) {
+    try { localStorage.setItem(LS_PLAYOUT, JSON.stringify(state)); } catch(e) {}
+  }
+  async function fetchPlayout() {
+    if (!client) return loadLocalPlayout();
+    const { data, error } = await client.from('meta').select('payload').eq('id', 'playout').maybeSingle();
+    if (error) { console.error('Supabase fetchPlayout error:', error); return loadLocalPlayout(); }
+    return data ? data.payload : null;
+  }
+  function notifyPlayout(state) {
+    playoutListeners.forEach(cb => { try { cb(state); } catch(e) {} });
+  }
+  function subscribePlayout(cb) {
+    playoutListeners.push(cb);
+    return () => { playoutListeners = playoutListeners.filter(x => x !== cb); };
+  }
+  async function savePlayout(state) {
+    if (client) {
+      const { error } = await client.from('meta').upsert({ id: 'playout', payload: state, updated_at: new Date().toISOString() });
+      if (error) console.error('Save playout error:', error);
+    } else {
+      saveLocalPlayout(state);
+      notifyPlayout(state);
+    }
+  }
+
   // ── Daily stats ─────────────────────────
   const LS_DAILY = 'buukkauskisa.daily.v1';
   let dailyListeners = [];
@@ -218,6 +251,7 @@
   async function init() {
     const initialPlayers = await fetchAll();
     const initialPlayoff = await fetchPlayoff();
+    const initialPlayout = await fetchPlayout();
     const initialDaily   = await fetchAllDailyStats();
     if (client) {
       client
@@ -229,8 +263,12 @@
       client
         .channel('public:meta')
         .on('postgres_changes',
-            { event: '*', schema: 'public', table: 'meta', filter: 'id=eq.playoffs' },
-            async () => { const fresh = await fetchPlayoff(); notifyPlayoff(fresh); })
+            { event: '*', schema: 'public', table: 'meta' },
+            async (payload) => {
+              const id = payload?.new?.id || payload?.old?.id;
+              if (id === 'playoffs') { const fresh = await fetchPlayoff(); notifyPlayoff(fresh); }
+              if (id === 'playout')  { const fresh = await fetchPlayout(); notifyPlayout(fresh); }
+            })
         .subscribe();
       client
         .channel('public:daily_stats')
@@ -242,10 +280,11 @@
       window.addEventListener('storage', (e) => {
         if (e.key === LS_KEY)     notify(loadLocal());
         if (e.key === LS_PLAYOFF) notifyPlayoff(loadLocalPlayoff());
+        if (e.key === LS_PLAYOUT) notifyPlayout(loadLocalPlayout());
         if (e.key === LS_DAILY)   notifyDaily(loadLocalDaily());
       });
     }
-    return { players: initialPlayers, playoff: initialPlayoff, daily: initialDaily };
+    return { players: initialPlayers, playoff: initialPlayoff, playout: initialPlayout, daily: initialDaily };
   }
 
   window.DB = {
@@ -259,6 +298,9 @@
     subscribePlayoff,
     savePlayoff,
     fetchPlayoff,
+    subscribePlayout,
+    savePlayout,
+    fetchPlayout,
     subscribeDaily,
     fetchAllDailyStats,
     upsertDailyStats,

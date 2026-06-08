@@ -17,27 +17,38 @@ const COMPETITION = {
     { date:  '4.6', wd: 'TO', week: 2 },
     { date:  '5.6', wd: 'PE', week: 2 },
   ],
+  playoffWeekdays: [
+    { date:  '8.6', wd: 'MA', week: 3 },
+    { date:  '9.6', wd: 'TI', week: 3 },
+    { date: '10.6', wd: 'KE', week: 3 },
+    { date: '11.6', wd: 'TO', week: 3 },
+    { date: '12.6', wd: 'PE', week: 3 },
+    { date: '15.6', wd: 'MA', week: 4 },
+    { date: '16.6', wd: 'TI', week: 4 },
+    { date: '17.6', wd: 'KE', week: 4 },
+    { date: '18.6', wd: 'TO', week: 4 },
+  ],
   totalDays: 10,
   currentDay: 1,
   playoffStartDate: new Date('2026-06-08T00:00:00'),
-  playoffEndDate:   new Date('2026-06-15T23:59:59'),
+  playoffEndDate:   new Date('2026-06-18T23:59:59'),
   playoffStart: '8.6',
-  playoffEnd:   '15.6',
+  playoffEnd:   '18.6',
   playoffRounds: {
-    QF: { label: 'PUOLIVÄLIERÄT', range: '8.6 – 11.6' },
-    SF: { label: 'VÄLIERÄT',      range: '12.6 – 13.6' },
-    F:  { label: 'FINAALI',       range: '14.6 – 15.6' },
+    QF: { label: 'PUOLIVÄLIERÄT', range: '8.6 – 9.6' },
+    SF: { label: 'VÄLIERÄT',      range: '10.6 – 12.6' },
+    F:  { label: 'FINAALI',       range: '15.6 – 18.6' },
   },
-  finalDate:    '15.6.2026',
-  finalDateLong: 'Maanantai 15.6.2026',
+  finalDate:    '18.6.2026',
+  finalDateLong: 'Torstai 18.6.2026',
 };
 
 // ── Phase ────────────────────────────────────
 //   pre       — ennen kauden alkua (< 25.5)
 //   regular   — runkosarja käynnissä
 //   lock      — runkosarja päättynyt, playoff ei vielä alkanut (vk-loppu 6.6–7.6)
-//   playoffs  — playoff käynnissä (8.6–15.6)
-//   finished  — kisa ohi (> 15.6)
+//   playoffs  — playoff käynnissä (8.6–18.6)
+//   finished  — kisa ohi (> 18.6)
 function competitionPhase(now) {
   now = now || new Date();
   if (now < COMPETITION.startDate) return 'pre';
@@ -203,8 +214,12 @@ function currentDayNumber() {
 
 // ── Päivä–avain -konversiot ──────────────────────────────────
 const WEEKDAY_DATE_KEYS = [
+  // Runkosarja
   '2026-05-25', '2026-05-26', '2026-05-27', '2026-05-28', '2026-05-29',
   '2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04', '2026-06-05',
+  // Playoff-viikot
+  '2026-06-08', '2026-06-09', '2026-06-10', '2026-06-11', '2026-06-12',
+  '2026-06-15', '2026-06-16', '2026-06-17', '2026-06-18',
 ];
 function weekdayIndexToDateKey(idx) { return WEEKDAY_DATE_KEYS[idx] ?? null; }
 function dateKeyToWeekdayIndex(key) { return WEEKDAY_DATE_KEYS.indexOf(key); }
@@ -236,6 +251,35 @@ function recalcPlayerFromDailyStats(player, myRows) {
   return { ...player, luurit, vastatut, buukit, last5, streak, trendN };
 }
 
+// ── Playout (pelaajat jotka jäivät runkosarjasta) ────────────────────────────
+const EMPTY_PLAYOUT = {
+  started: false,
+  startedAt: null,
+  finishedAt: null,
+  sakkoKey: null,    // pelaajan key joka saa sakon
+};
+
+function startPlayout(nonPlayoffPlayers) {
+  if (nonPlayoffPlayers.length === 0) return EMPTY_PLAYOUT;
+  return { ...EMPTY_PLAYOUT, started: true, startedAt: Date.now() };
+}
+
+function setSakko(playout, playerKey) {
+  return {
+    ...playout,
+    sakkoKey: playerKey,
+    finishedAt: Date.now(),
+  };
+}
+
+function clearSakko(playout) {
+  return { ...playout, sakkoKey: null, finishedAt: null };
+}
+
+function resetPlayout() {
+  return { ...EMPTY_PLAYOUT };
+}
+
 Object.assign(window, {
   COMPETITION,
   LS_CURRENT,
@@ -246,4 +290,5 @@ Object.assign(window, {
   EMPTY_PLAYOFF, MATCH_ORDER,
   setMatchWinner, clearMatchWinner, startPlayoffs, resetPlayoffs, recomputeAdvancement,
   WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats,
+  EMPTY_PLAYOUT, startPlayout, setSakko, clearSakko, resetPlayout,
 });

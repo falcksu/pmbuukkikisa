@@ -436,7 +436,7 @@ function TrendCell({ n }) {
   return <div className="trend flat">– 0</div>;
 }
 
-function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete }) {
+function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete, isSakko }) {
   const handleDelete = (e) => {
     e.stopPropagation();
     onDelete && onDelete(p.key, p.nick);
@@ -454,9 +454,9 @@ function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete }
     >
       <div className="rank">{String(p.rank).padStart(2, '0')}</div>
       <div className="player">
-        <div className="avatar">{p.init}</div>
+        <div className={cls('avatar', isSakko && 'sakko-av')}>{p.init}</div>
         <div className="name-block">
-          <div className="nick">{p.nick}</div>
+          <div className="nick">{p.nick}{isSakko && <span className="sakko-inline">🚫 SAKKO</span>}</div>
           <div className="city">{p.city.toUpperCase()}</div>
         </div>
       </div>
@@ -502,7 +502,7 @@ function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete }
 
 // ── Table ───────────────────────────
 
-function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete }) {
+function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete, sakkoKey }) {
   const hasEnough = sorted.length >= 9;
   const isEmpty = sorted.length === 0;
   return (
@@ -533,6 +533,7 @@ function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete }) {
           hasEnoughForPlayoff={hasEnough}
           isAdmin={isAdmin}
           onDelete={onDelete}
+          isSakko={sakkoKey === p.key}
         />
       ))}
       {hasEnough && (
@@ -567,6 +568,7 @@ function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete }) {
           hasEnoughForPlayoff={hasEnough}
           isAdmin={isAdmin}
           onDelete={onDelete}
+          isSakko={sakkoKey === p.key}
         />
       ))}
     </div>
@@ -1129,8 +1131,18 @@ function TweaksUI({ t, setTweak, onResetAll, isAdmin }) {
 // ── DailyReport ───────────────────────────
 
 function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
-  const days = COMPETITION.weekdays;
-  const todayIdx = Math.max(0, currentWeekdayIndex() >= 0 ? currentWeekdayIndex() : 0);
+  // Combine regular season + playoff days for the selector
+  const allDays = [
+    ...COMPETITION.weekdays.map((d, i) => ({ ...d, idx: i })),
+    ...COMPETITION.playoffWeekdays.map((d, i) => ({ ...d, idx: 10 + i })),
+  ];
+  const phase = competitionPhase();
+  const days = (phase === 'playoffs' || phase === 'finished' || phase === 'lock')
+    ? allDays
+    : COMPETITION.weekdays.map((d, i) => ({ ...d, idx: i }));
+
+  const rawIdx = currentWeekdayIndex();
+  const todayIdx = rawIdx >= 0 ? Math.min(rawIdx, WEEKDAY_DATE_KEYS.length - 1) : 0;
   const [selIdx, setSelIdx] = useState(todayIdx);
   const [form, setForm] = useState({ luurit: 0, vastatut: 0, buukit: 0 });
   const [saved, setSaved] = useState(false);
@@ -1176,11 +1188,11 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
 
       {/* Day selector */}
       <div className="dr-days">
-        {days.map((d, i) => (
+        {days.map((d) => (
           <button
-            key={i}
-            className={cls('dr-day-btn', i === selIdx && 'active', i === todayIdx && 'today-mark')}
-            onClick={() => setSelIdx(i)}
+            key={d.idx}
+            className={cls('dr-day-btn', d.idx === selIdx && 'active', d.idx === todayIdx && 'today-mark', d.idx >= 10 && 'playoff-day')}
+            onClick={() => setSelIdx(d.idx)}
           >
             <span className="wd">{d.wd}</span>
             <span className="dt">{d.date}</span>
@@ -1195,7 +1207,7 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
             <thead>
               <tr>
                 <th>PELAAJA</th>
-                {days.map((d,i) => <th key={i} className={i===selIdx?'sel-col':''}>{d.wd}<br/><span style={{fontSize:10,fontWeight:400}}>{d.date}</span></th>)}
+                {days.map((d) => <th key={d.idx} className={cls(d.idx===selIdx&&'sel-col', d.idx>=10&&'playoff-col')}>{d.wd}<br/><span style={{fontSize:10,fontWeight:400}}>{d.date}</span></th>)}
                 <th>YHT.</th>
               </tr>
             </thead>
@@ -1209,14 +1221,14 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
                       <span className="init-badge" style={{background:'var(--red)',color:'#fff',padding:'1px 5px',fontSize:11,fontWeight:700,borderRadius:2,marginRight:5}}>{p.init}</span>
                       {p.nick}<span style={{color:'var(--ink-3)',fontSize:11,marginLeft:4}}>{p.city}</span>
                     </td>
-                    {days.map((d,i) => {
-                      const dk = weekdayIndexToDateKey(i);
+                    {days.map((d) => {
+                      const dk = weekdayIndexToDateKey(d.idx);
                       const row = myRows.find(r => r.date_key === dk);
                       const b = row ? row.buukit : 0;
                       const l = row ? row.luurit : 0;
                       const v = row ? row.vastatut : 0;
                       return (
-                        <td key={i} className={cls('stat-cell', i===selIdx&&'sel-col', b>0&&'has-data')}>
+                        <td key={d.idx} className={cls('stat-cell', d.idx===selIdx&&'sel-col', b>0&&'has-data', d.idx>=10&&'playoff-col')}>
                           {l>0||v>0||b>0 ? (
                             <div className="day-cell-data">
                               <div className="day-luuri">L:{l}</div>
@@ -1332,6 +1344,65 @@ function TabNav({ active, onChange }) {
 
 // ── App ───────────────────────────
 
+// ── PlayoutPanel ───────────────────────────
+
+function PlayoutPanel({ playout, sorted, playersMap, isAdmin, onStart, onSetSakko, onClearSakko, onReset }) {
+  const nonPlayoff = sorted.filter(p => !p.inPlayoff);
+  const sakkoPlayer = playout?.sakkoKey ? playersMap[playout.sakkoKey] : null;
+
+  return (
+    <div className="side-card playout-card">
+      <h3 className="display">
+        PLAYOUT
+        <span className="tag">RUNKOSARJAN ULKOPUOLISET</span>
+      </h3>
+
+      {playout?.sakkoKey && sakkoPlayer && (
+        <div className="playout-sakko-banner">
+          <span className="sakko-ico">🚫</span>
+          <span><strong>{sakkoPlayer.nick}</strong> sai SAKON</span>
+          {isAdmin && <button className="playout-undo-btn" onClick={onClearSakko}>↺ Peru</button>}
+        </div>
+      )}
+
+      {nonPlayoff.length === 0 ? (
+        <div className="bracket-note">Kaikki pelaajat pääsivät playoffeihin!</div>
+      ) : (
+        <div className="playout-list">
+          {nonPlayoff.map(p => (
+            <div key={p.key} className={cls('playout-row', playout?.sakkoKey === p.key && 'is-sakko')}>
+              <span className="playout-rank">{String(p.rank).padStart(2,'0')}</span>
+              <span className="playout-av">{p.init}</span>
+              <span className="playout-nick">{p.nick}</span>
+              <span className="playout-pts">{p.buukit} pts</span>
+              {playout?.sakkoKey === p.key
+                ? <span className="sakko-badge">🚫 SAKKO</span>
+                : isAdmin && playout?.started && !playout?.sakkoKey
+                  ? <button className="playout-sakko-btn" onClick={() => onSetSakko(p.key)}>SAKKO</button>
+                  : null
+              }
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="bracket-tools" style={{marginTop:12}}>
+          {!playout?.started ? (
+            <button className="bt-btn primary" onClick={onStart} disabled={nonPlayoff.length === 0}>
+              ⚡ KÄYNNISTÄ PLAYOUT
+            </button>
+          ) : !playout?.sakkoKey ? (
+            <div className="bt-hint">Valitse sakonsaaja listalta → SAKKO-nappi</div>
+          ) : (
+            <button className="bt-btn" onClick={onReset}>↺ Nollaa playout</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('buukkikisa.pw') === '1');
@@ -1350,12 +1421,14 @@ function App() {
   const [today, setToday] = useState(() => currentDayNumber());
   const [phase, setPhase] = useState(() => competitionPhase());
   const [playoff, setPlayoff] = useState(() => EMPTY_PLAYOFF);
+  const [playout, setPlayout] = useState(() => EMPTY_PLAYOUT);
   const [dailyStats, setDailyStats] = useState([]);
   const [activeTab, setActiveTab] = useState('leaderboard');
 
   // DB init + realtime subscribe
   const playersMapRef = useRef({});
   const playoffRef    = useRef(EMPTY_PLAYOFF);
+  const playoutRef    = useRef(EMPTY_PLAYOUT);
   const dailyRef      = useRef([]);
 
   function applyDailyToPlayers(rawMap, rows) {
@@ -1368,12 +1441,13 @@ function App() {
   }
 
   useEffect(() => {
-    let unsubP, unsubPO, unsubD;
+    let unsubP, unsubPO, unsubPout, unsubD;
     (async () => {
       const initial = await DB.init();
       const rawPlayers = initial.players || {};
       const dailyRows  = initial.daily   || [];
       const po         = initial.playoff || EMPTY_PLAYOFF;
+      const pout       = initial.playout || EMPTY_PLAYOUT;
 
       // daily_stats is the source of truth — always recalc totals from it
       const players = applyDailyToPlayers(rawPlayers, dailyRows);
@@ -1381,9 +1455,11 @@ function App() {
       dailyRef.current      = dailyRows;
       playersMapRef.current = players;
       playoffRef.current    = po;
+      playoutRef.current    = pout;
       setDailyStats(dailyRows);
       setPlayersMap(players);
       setPlayoff(po);
+      setPlayout(pout);
       setDbBackend(DB.backend);
 
       // Persist corrected totals back to DB
@@ -1399,6 +1475,11 @@ function App() {
         playoffRef.current = next;
         setPlayoff(next);
       });
+      unsubPout = DB.subscribePlayout((fresh) => {
+        const next = fresh || EMPTY_PLAYOUT;
+        playoutRef.current = next;
+        setPlayout(next);
+      });
       unsubD = DB.subscribeDaily((rows) => {
         dailyRef.current = rows;
         setDailyStats(rows);
@@ -1407,7 +1488,12 @@ function App() {
         setPlayersMap(recalced);
       });
     })();
-    return () => { if (unsubP) unsubP(); if (unsubPO) unsubPO(); if (unsubD) unsubD(); };
+    return () => {
+      if (unsubP) unsubP();
+      if (unsubPO) unsubPO();
+      if (unsubPout) unsubPout();
+      if (unsubD) unsubD();
+    };
   }, []);
 
   // Phase auto-päivitys (joka 5 min)
@@ -1532,6 +1618,35 @@ function App() {
     if (!confirm('Nollataanko playoffit? (Seeds, ottelut ja voittaja häviävät)')) return;
     persistPlayoff(resetPlayoffs());
   }, [persistPlayoff]);
+
+  // ── Playout handlers ───────────────────
+  const persistPlayout = useCallback((next) => {
+    playoutRef.current = next;
+    setPlayout(next);
+    DB.savePlayout(next);
+  }, []);
+
+  const handleStartPlayout = useCallback(() => {
+    const nonPlayoff = decoratePlayers(playersMapRef.current).filter(p => !p.inPlayoff);
+    if (nonPlayoff.length === 0) { alert('Ei playout-pelaajia.'); return; }
+    if (!confirm(`Käynnistetäänkö playout ${nonPlayoff.length} pelaajalle?\n\n${nonPlayoff.map(p => `${p.rank}. ${p.nick}`).join('\n')}`)) return;
+    persistPlayout(startPlayout(nonPlayoff));
+  }, [persistPlayout]);
+
+  const handleSetSakko = useCallback((playerKey) => {
+    if (!confirm('Asetetaanko tälle pelaajalle SAKKO?')) return;
+    persistPlayout(setSakko(playoutRef.current, playerKey));
+  }, [persistPlayout]);
+
+  const handleClearSakko = useCallback(() => {
+    if (!confirm('Poistetaanko SAKKO?')) return;
+    persistPlayout(clearSakko(playoutRef.current));
+  }, [persistPlayout]);
+
+  const handleResetPlayout = useCallback(() => {
+    if (!confirm('Nollataanko playout?')) return;
+    persistPlayout(resetPlayout());
+  }, [persistPlayout]);
 
   // ── Actions for current user ───────────────────
   const performAction = useCallback((kind, rect) => {
@@ -1690,7 +1805,7 @@ function App() {
         <div className="main">
           <div>
             <AdminPanel players={sorted} onDelete={handleDeletePlayer} onResetAll={handleResetAll} />
-            <Table sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} flashKey={flashKey} meKey={null} isAdmin onDelete={handleDeletePlayer} />
+            <Table sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} flashKey={flashKey} meKey={null} isAdmin onDelete={handleDeletePlayer} sakkoKey={playout?.sakkoKey} />
           </div>
           <div className="side">
             {t.showPodium && <Podium sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} />}
@@ -1707,6 +1822,16 @@ function App() {
                 onReset={handleResetPlayoffs}
               />
             )}
+            <PlayoutPanel
+              playout={playout}
+              sorted={sorted}
+              playersMap={playersMap}
+              isAdmin={true}
+              onStart={handleStartPlayout}
+              onSetSakko={handleSetSakko}
+              onClearSakko={handleClearSakko}
+              onReset={handleResetPlayout}
+            />
             <PrizeBanner />
           </div>
         </div>
@@ -1740,7 +1865,7 @@ function App() {
       <div className="main">
         <div>
           <MyCard me={me} onAction={performAction} />
-          <Table sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} flashKey={flashKey} meKey={currentKey} />
+          <Table sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} flashKey={flashKey} meKey={currentKey} sakkoKey={playout?.sakkoKey} />
         </div>
         <div className="side">
           {t.showPodium && <Podium sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} />}
@@ -1751,6 +1876,14 @@ function App() {
               playoff={playoff}
               isAdmin={false}
               onSelect={(p) => setSelectedKey(p.key)}
+            />
+          )}
+          {playout?.started && (
+            <PlayoutPanel
+              playout={playout}
+              sorted={sorted}
+              playersMap={playersMap}
+              isAdmin={false}
             />
           )}
           <PrizeBanner />

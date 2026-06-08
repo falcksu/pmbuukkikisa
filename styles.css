@@ -2058,6 +2058,63 @@ input { font: inherit; color: inherit; }
 .day-vast { color:var(--ink-3); font-size:10px; }
 .day-book { color:var(--accent); font-weight:700; font-size:11px; }
 
+/* ─── Playout panel ─────────────────────── */
+
+.playout-card { margin-top: 16px; }
+.playout-sakko-banner {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--ink); color: var(--bg);
+  padding: 10px 14px; margin-bottom: 14px;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .06em;
+}
+.sakko-ico { font-size: 18px; }
+.playout-undo-btn {
+  margin-left: auto; font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px; font-weight: 700; letter-spacing: .08em;
+  background: var(--bg-3); color: var(--ink); padding: 3px 10px;
+  border: 1px solid var(--line-2); cursor: pointer;
+}
+.playout-list { display: flex; flex-direction: column; gap: 4px; }
+.playout-row {
+  display: grid;
+  grid-template-columns: 28px 28px 1fr auto auto;
+  align-items: center; gap: 8px;
+  padding: 7px 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ink-3);
+  font-size: 14px;
+}
+.playout-row.is-sakko { border-left-color: var(--red); background: rgba(196,57,27,.06); }
+.playout-rank { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px; color: var(--ink-3); text-align: right; }
+.playout-av {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--bg-3); display: flex; align-items: center; justify-content: center;
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px;
+  border: 1px solid var(--line-2);
+}
+.playout-av.sakko-av { background: var(--red); color: #fff; }
+.playout-nick { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px; text-transform: uppercase; }
+.playout-pts { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+.sakko-badge { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: .06em; color: var(--red); white-space: nowrap; }
+.playout-sakko-btn {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: .08em;
+  background: var(--red); color: #fff; padding: 3px 8px; cursor: pointer; border: none; white-space: nowrap;
+}
+.playout-sakko-btn:hover { background: #a02b14; }
+
+/* SAKKO badge inline in leaderboard */
+.sakko-inline {
+  display: inline-block; margin-left: 8px;
+  font-family: 'Barlow Condensed', sans-serif; font-size: 12px; font-weight: 800;
+  letter-spacing: .06em; color: var(--red); vertical-align: middle;
+}
+
+/* Playoff days in day selector */
+.dr-day-btn.playoff-day { border-top: 2px solid var(--accent); }
+.dr-admin-table th.playoff-col { background: #2a1a10; }
+.dr-admin-table td.playoff-col { background: rgba(255,74,26,.03); }
+
 /* ─── Password gate ─────────────────────── */
 
 .pw-gate {
