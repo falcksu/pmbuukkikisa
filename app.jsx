@@ -646,6 +646,7 @@ function MatchCard({
   matchId, label, roundRange,
   match,                  // { homeKey, awayKey, winnerKey, seedH, seedA }
   playersMap,
+  playoffPointsMap,
   isAdmin, started,
   onWin, onUndo, onSelect,
   highlight,
@@ -659,15 +660,16 @@ function MatchCard({
   const pending = started && !decided && (!match.homeKey || !match.awayKey);
   const status = decided ? 'done' : ready ? 'live' : pending ? 'pending' : 'preview';
 
-  const homePts = home?.buukit ?? 0;
-  const awayPts = away?.buukit ?? 0;
+  // Pisteet = vain playoff-kauden buukit (8.6→), ei koko kauden yhteensä
+  const homePts = playoffPointsMap?.[match.homeKey] ?? 0;
+  const awayPts = playoffPointsMap?.[match.awayKey] ?? 0;
   const homeLeading = !decided && home && away && homePts > awayPts;
   const awayLeading = !decided && home && away && awayPts > homePts;
 
   const SideRow = ({ side, player, seed, isWinner, isLoser }) => {
     const clickable = !!player && onSelect;
     const isLeading = side === 'home' ? homeLeading : awayLeading;
-    const pts = player?.buukit ?? null;
+    const pts = side === 'home' ? homePts : awayPts;
     return (
       <div
         className={cls('m-side', isWinner && 'winner', isLoser && 'loser', isLeading && 'leading')}
@@ -678,7 +680,7 @@ function MatchCard({
         <span className="m-nick">
           {player ? player.nick : '—'}
         </span>
-        {player && (
+        {player && started && (
           <span className={cls('m-pts', isLeading && 'pts-lead')}>
             {pts}<span className="m-pts-label">pts</span>
             {isLeading && <span className="m-lead-ico">▲</span>}
@@ -732,7 +734,7 @@ function MatchCard({
   );
 }
 
-function Bracket({ sorted, playersMap, playoff, isAdmin, onSelect, onWin, onUndo, onStart, onReset }) {
+function Bracket({ sorted, playersMap, playoff, playoffPointsMap, isAdmin, onSelect, onWin, onUndo, onStart, onReset }) {
   const started = !!playoff?.started;
 
   let matches;
@@ -795,7 +797,7 @@ function Bracket({ sorted, playersMap, playoff, isAdmin, onSelect, onWin, onUndo
             <MatchCard
               key={id} matchId={id} label={id}
               match={matches[id]}
-              playersMap={playersMap}
+              playersMap={playersMap} playoffPointsMap={playoffPointsMap}
               isAdmin={isAdmin} started={started}
               onWin={onWin} onUndo={onUndo} onSelect={onSelect}
             />
@@ -810,14 +812,14 @@ function Bracket({ sorted, playersMap, playoff, isAdmin, onSelect, onWin, onUndo
           <MatchCard
             matchId="SF1" label="VE 1"
             match={matches.SF1}
-            playersMap={playersMap}
+            playersMap={playersMap} playoffPointsMap={playoffPointsMap}
             isAdmin={isAdmin} started={started}
             onWin={onWin} onUndo={onUndo} onSelect={onSelect}
           />
           <MatchCard
             matchId="SF2" label="VE 2"
             match={matches.SF2}
-            playersMap={playersMap}
+            playersMap={playersMap} playoffPointsMap={playoffPointsMap}
             isAdmin={isAdmin} started={started}
             onWin={onWin} onUndo={onUndo} onSelect={onSelect}
           />
@@ -831,7 +833,7 @@ function Bracket({ sorted, playersMap, playoff, isAdmin, onSelect, onWin, onUndo
           <MatchCard
             matchId="F" label="FINAALI"
             match={matches.F}
-            playersMap={playersMap}
+            playersMap={playersMap} playoffPointsMap={playoffPointsMap}
             isAdmin={isAdmin} started={started}
             onWin={onWin} onUndo={onUndo} onSelect={onSelect}
             highlight
@@ -1378,8 +1380,15 @@ function TabNav({ active, onChange, isAdmin }) {
 
 // ── PlayoutPanel ───────────────────────────
 
-function PlayoutPanel({ playout, sorted, playersMap, isAdmin, onStart, onSetSakko, onClearSakko, onReset }) {
-  const nonPlayoff = sorted.filter(p => !p.inPlayoff && p.key !== ADMIN_KEY);
+function PlayoutPanel({ playout, sorted, playersMap, playoff, playoffPointsMap, isAdmin, onStart, onSetSakko, onClearSakko, onReset }) {
+  // Käytä jäädytettyjä playoff-seedejä, ei nykyistä rankia
+  const inPlayoffSet = playoff?.started
+    ? new Set(Object.values(playoff.seeds || {}))
+    : null;
+  const nonPlayoff = sorted
+    .filter(p => inPlayoffSet ? !inPlayoffSet.has(p.key) : !p.inPlayoff)
+    .map(p => ({ ...p, playoffPts: playoffPointsMap?.[p.key] ?? 0 }))
+    .sort((a, b) => b.playoffPts - a.playoffPts);
   const sakkoPlayer = playout?.sakkoKey ? playersMap[playout.sakkoKey] : null;
 
   return (
@@ -1403,10 +1412,10 @@ function PlayoutPanel({ playout, sorted, playersMap, isAdmin, onStart, onSetSakk
         <div className="playout-list">
           {nonPlayoff.map(p => (
             <div key={p.key} className={cls('playout-row', playout?.sakkoKey === p.key && 'is-sakko')}>
-              <span className="playout-rank">{String(p.rank).padStart(2,'0')}</span>
-              <span className="playout-av">{p.init}</span>
+              <span className="playout-rank">{String(nonPlayoff.indexOf(p)+1).padStart(2,'0')}</span>
+              <span className={cls('playout-av', playout?.sakkoKey === p.key && 'sakko-av')}>{p.init}</span>
               <span className="playout-nick">{p.nick}</span>
-              <span className="playout-pts">{p.buukit} pts</span>
+              <span className="playout-pts">{p.playoffPts} pts</span>
               {playout?.sakkoKey === p.key
                 ? <span className="sakko-badge">🚫 SAKKO</span>
                 : isAdmin && playout?.started && !playout?.sakkoKey
@@ -1572,6 +1581,17 @@ function App() {
     return decoratePlayers(filtered);
   }, [playersMap, excludedKeys]);
 
+  // Playoff-kauden pisteet erikseen (8.6→) — bracket ja playout näyttävät nämä
+  const playoffPointsMap = useMemo(() => {
+    const map = {};
+    dailyStats.forEach(r => {
+      if (dateKeyToWeekdayIndex(r.date_key) >= 10) { // vain playoff-päivät
+        map[r.player_id] = (map[r.player_id] || 0) + (r.buukit || 0);
+      }
+    });
+    return map;
+  }, [dailyStats]);
+
   const toggleExcluded = useCallback((key) => {
     setExcludedKeys(prev => {
       const next = new Set(prev);
@@ -1683,11 +1703,18 @@ function App() {
   }, []);
 
   const handleStartPlayout = useCallback(() => {
-    const nonPlayoff = decoratePlayers(
+    // Käytä jäädytettyjä seedejä jos playoff on käynnissä
+    const inPlayoffSet = playoffRef.current?.started
+      ? new Set(Object.values(playoffRef.current.seeds || {}))
+      : null;
+    const candidates = decoratePlayers(
       Object.fromEntries(Object.entries(playersMapRef.current).filter(([k]) => k !== ADMIN_KEY && !excludedKeysRef.current.has(k)))
-    ).filter(p => !p.inPlayoff);
+    );
+    const nonPlayoff = inPlayoffSet
+      ? candidates.filter(p => !inPlayoffSet.has(p.key))
+      : candidates.filter(p => !p.inPlayoff);
     if (nonPlayoff.length === 0) { alert('Ei playout-pelaajia.'); return; }
-    if (!confirm(`Käynnistetäänkö playout ${nonPlayoff.length} pelaajalle?\n\n${nonPlayoff.map(p => `${p.rank}. ${p.nick}`).join('\n')}`)) return;
+    if (!confirm(`Käynnistetäänkö playout ${nonPlayoff.length} pelaajalle?\n\n${nonPlayoff.map(p => `${p.nick} (${p.city})`).join('\n')}`)) return;
     persistPlayout(startPlayout(nonPlayoff));
   }, [persistPlayout]);
 
@@ -1872,6 +1899,7 @@ function App() {
                 sorted={sortedPublic}
                 playersMap={playersMap}
                 playoff={playoff}
+                playoffPointsMap={playoffPointsMap}
                 isAdmin={true}
                 onSelect={(p) => setSelectedKey(p.key)}
                 onWin={handleSetWinner}
@@ -1884,6 +1912,8 @@ function App() {
               playout={playout}
               sorted={sortedPublic}
               playersMap={playersMap}
+              playoff={playoff}
+              playoffPointsMap={playoffPointsMap}
               isAdmin={true}
               onStart={handleStartPlayout}
               onSetSakko={handleSetSakko}
@@ -1934,6 +1964,7 @@ function App() {
               sorted={sortedPublic}
               playersMap={playersMap}
               playoff={playoff}
+              playoffPointsMap={playoffPointsMap}
               isAdmin={false}
               onSelect={(p) => setSelectedKey(p.key)}
             />
@@ -1943,6 +1974,8 @@ function App() {
               playout={playout}
               sorted={sortedPublic}
               playersMap={playersMap}
+              playoff={playoff}
+              playoffPointsMap={playoffPointsMap}
               isAdmin={false}
             />
           )}
