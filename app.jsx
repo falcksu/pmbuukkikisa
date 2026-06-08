@@ -1347,7 +1347,7 @@ function TabNav({ active, onChange }) {
 // ── PlayoutPanel ───────────────────────────
 
 function PlayoutPanel({ playout, sorted, playersMap, isAdmin, onStart, onSetSakko, onClearSakko, onReset }) {
-  const nonPlayoff = sorted.filter(p => !p.inPlayoff);
+  const nonPlayoff = sorted.filter(p => !p.inPlayoff && p.key !== ADMIN_KEY);
   const sakkoPlayer = playout?.sakkoKey ? playersMap[playout.sakkoKey] : null;
 
   return (
@@ -1627,7 +1627,7 @@ function App() {
   }, []);
 
   const handleStartPlayout = useCallback(() => {
-    const nonPlayoff = decoratePlayers(playersMapRef.current).filter(p => !p.inPlayoff);
+    const nonPlayoff = decoratePlayers(playersMapRef.current).filter(p => !p.inPlayoff && p.key !== ADMIN_KEY);
     if (nonPlayoff.length === 0) { alert('Ei playout-pelaajia.'); return; }
     if (!confirm(`Käynnistetäänkö playout ${nonPlayoff.length} pelaajalle?\n\n${nonPlayoff.map(p => `${p.rank}. ${p.nick}`).join('\n')}`)) return;
     persistPlayout(startPlayout(nonPlayoff));
