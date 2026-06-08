@@ -1329,14 +1329,17 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
 
 // ── Tab nav ───────────────────────────
 
-function TabNav({ active, onChange }) {
+function TabNav({ active, onChange, isAdmin }) {
   return (
     <div className="tab-nav">
       <button className={cls('tab-btn', active === 'leaderboard' && 'active')} onClick={() => onChange('leaderboard')}>
         ⚡ SARJATAULUKKO
       </button>
+      <button className={cls('tab-btn', active === 'teamreport' && 'active')} onClick={() => onChange('teamreport')}>
+        📋 TIIMIRAPORTTI
+      </button>
       <button className={cls('tab-btn', active === 'report' && 'active')} onClick={() => onChange('report')}>
-        📊 PÄIVÄRAPORTTI
+        📊 {isAdmin ? 'PÄIVÄRAPORTTI' : 'OMA RAPORTTI'}
       </button>
     </div>
   );
@@ -1798,9 +1801,9 @@ function App() {
         <Header me={me} onLogout={handleLogout} playerCount={sorted.length} isAdmin today={today} dbBackend={dbBackend} />
         {t.showTicker && <Ticker items={tickerItems} paused={!t.pulse} />}
         <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
-        <TabNav active={activeTab} onChange={setActiveTab} />
-        {activeTab === 'report' ? (
-          <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sorted} onSaveDay={handleSaveDay} />
+        <TabNav active={activeTab} onChange={setActiveTab} isAdmin />
+        {activeTab === 'report' || activeTab === 'teamreport' ? (
+          <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sorted.filter(p => p.key !== ADMIN_KEY)} onSaveDay={handleSaveDay} />
         ) : (
         <div className="main">
           <div>
@@ -1858,8 +1861,10 @@ function App() {
       <Header me={me} onLogout={handleLogout} playerCount={sorted.length} today={today} dbBackend={dbBackend} />
       {t.showTicker && <Ticker items={tickerItems} paused={!t.pulse} />}
       <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
-      <TabNav active={activeTab} onChange={setActiveTab} />
-      {activeTab === 'report' ? (
+      <TabNav active={activeTab} onChange={setActiveTab} isAdmin={false} />
+      {activeTab === 'teamreport' ? (
+        <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sorted.filter(p => p.key !== ADMIN_KEY)} onSaveDay={handleSaveDay} />
+      ) : activeTab === 'report' ? (
         <DailyReport currentKey={currentKey} isAdmin={false} dailyStats={dailyStats} players={sorted} onSaveDay={handleSaveDay} />
       ) : (
       <div className="main">
