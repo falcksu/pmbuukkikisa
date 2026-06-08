@@ -436,10 +436,14 @@ function TrendCell({ n }) {
   return <div className="trend flat">– 0</div>;
 }
 
-function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete, isSakko }) {
+function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete, isSakko, isExcluded, onToggleExclude }) {
   const handleDelete = (e) => {
     e.stopPropagation();
     onDelete && onDelete(p.key, p.nick);
+  };
+  const handleToggleExclude = (e) => {
+    e.stopPropagation();
+    onToggleExclude && onToggleExclude(p.key);
   };
   return (
     <div
@@ -448,7 +452,8 @@ function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete, 
         `rank-${p.rank}`,
         hasEnoughForPlayoff && p.inPlayoff && 'in-playoff',
         flash && 'just-incremented',
-        isMe && 'is-me'
+        isMe && 'is-me',
+        isExcluded && 'row-excluded'
       )}
       onClick={() => onClick(p)}
     >
@@ -494,6 +499,13 @@ function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete, 
         )}
       </div>
       {isAdmin && (
+        <button
+          className={cls('row-excl', isExcluded && 'row-excl-on')}
+          onClick={handleToggleExclude}
+          title={isExcluded ? `Näytä ${p.nick} kilpailussa` : `Piilota ${p.nick} kilpailusta`}
+        >{isExcluded ? '👁' : '🚫'}</button>
+      )}
+      {isAdmin && (
         <button className="row-del" onClick={handleDelete} title={`Poista ${p.nick}`}>×</button>
       )}
     </div>
@@ -502,7 +514,7 @@ function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete, 
 
 // ── Table ───────────────────────────
 
-function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete, sakkoKey }) {
+function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete, sakkoKey, excludedKeys, onToggleExclude }) {
   const hasEnough = sorted.length >= 9;
   const isEmpty = sorted.length === 0;
   return (
@@ -534,6 +546,8 @@ function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete, sakkoKey 
           isAdmin={isAdmin}
           onDelete={onDelete}
           isSakko={sakkoKey === p.key}
+          isExcluded={excludedKeys?.has(p.key)}
+          onToggleExclude={onToggleExclude}
         />
       ))}
       {hasEnough && (
@@ -569,6 +583,8 @@ function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete, sakkoKey 
           isAdmin={isAdmin}
           onDelete={onDelete}
           isSakko={sakkoKey === p.key}
+          isExcluded={excludedKeys?.has(p.key)}
+          onToggleExclude={onToggleExclude}
         />
       ))}
     </div>
@@ -643,11 +659,18 @@ function MatchCard({
   const pending = started && !decided && (!match.homeKey || !match.awayKey);
   const status = decided ? 'done' : ready ? 'live' : pending ? 'pending' : 'preview';
 
+  const homePts = home?.buukit ?? 0;
+  const awayPts = away?.buukit ?? 0;
+  const homeLeading = !decided && home && away && homePts > awayPts;
+  const awayLeading = !decided && home && away && awayPts > homePts;
+
   const SideRow = ({ side, player, seed, isWinner, isLoser }) => {
     const clickable = !!player && onSelect;
+    const isLeading = side === 'home' ? homeLeading : awayLeading;
+    const pts = player?.buukit ?? null;
     return (
       <div
-        className={cls('m-side', isWinner && 'winner', isLoser && 'loser')}
+        className={cls('m-side', isWinner && 'winner', isLoser && 'loser', isLeading && 'leading')}
         onClick={() => clickable && onSelect(player)}
         style={{ cursor: clickable ? 'pointer' : 'default' }}
       >
@@ -655,6 +678,12 @@ function MatchCard({
         <span className="m-nick">
           {player ? player.nick : '—'}
         </span>
+        {player && (
+          <span className={cls('m-pts', isLeading && 'pts-lead')}>
+            {pts}<span className="m-pts-label">pts</span>
+            {isLeading && <span className="m-lead-ico">▲</span>}
+          </span>
+        )}
         <span className="m-ico">{isWinner ? '✓' : ''}</span>
         {isAdmin && ready && player && (
           <button
@@ -1425,6 +1454,12 @@ function App() {
   const [phase, setPhase] = useState(() => competitionPhase());
   const [playoff, setPlayoff] = useState(() => EMPTY_PLAYOFF);
   const [playout, setPlayout] = useState(() => EMPTY_PLAYOUT);
+  const [excludedKeys, setExcludedKeys] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('buukkauskisa.excluded.v1') || '[]')); }
+    catch { return new Set(); }
+  });
+  const excludedKeysRef = useRef(new Set());
+  useEffect(() => { excludedKeysRef.current = excludedKeys; }, [excludedKeys]);
   const [dailyStats, setDailyStats] = useState([]);
   const [activeTab, setActiveTab] = useState('leaderboard');
 
@@ -1528,6 +1563,24 @@ function App() {
   useEffect(() => { document.documentElement.style.setProperty('--accent', t.accent); }, [t.accent]);
 
   const sorted = useMemo(() => decoratePlayers(playersMap), [playersMap]);
+
+  // Julkinen lista — ilman adminia ja piilotetut pelaajat
+  const sortedPublic = useMemo(() => {
+    const filtered = Object.fromEntries(
+      Object.entries(playersMap).filter(([k]) => k !== ADMIN_KEY && !excludedKeys.has(k))
+    );
+    return decoratePlayers(filtered);
+  }, [playersMap, excludedKeys]);
+
+  const toggleExcluded = useCallback((key) => {
+    setExcludedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      localStorage.setItem('buukkauskisa.excluded.v1', JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
   const isAdmin = currentKey === ADMIN_KEY;
   const me = isAdmin
     ? { key: ADMIN_KEY, nick: ADMIN_NICK, city: 'Tampere', init: 'AD', isAdmin: true }
@@ -1630,7 +1683,9 @@ function App() {
   }, []);
 
   const handleStartPlayout = useCallback(() => {
-    const nonPlayoff = decoratePlayers(playersMapRef.current).filter(p => !p.inPlayoff && p.key !== ADMIN_KEY);
+    const nonPlayoff = decoratePlayers(
+      Object.fromEntries(Object.entries(playersMapRef.current).filter(([k]) => k !== ADMIN_KEY && !excludedKeysRef.current.has(k)))
+    ).filter(p => !p.inPlayoff);
     if (nonPlayoff.length === 0) { alert('Ei playout-pelaajia.'); return; }
     if (!confirm(`Käynnistetäänkö playout ${nonPlayoff.length} pelaajalle?\n\n${nonPlayoff.map(p => `${p.rank}. ${p.nick}`).join('\n')}`)) return;
     persistPlayout(startPlayout(nonPlayoff));
@@ -1808,13 +1863,13 @@ function App() {
         <div className="main">
           <div>
             <AdminPanel players={sorted} onDelete={handleDeletePlayer} onResetAll={handleResetAll} />
-            <Table sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} flashKey={flashKey} meKey={null} isAdmin onDelete={handleDeletePlayer} sakkoKey={playout?.sakkoKey} />
+            <Table sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} flashKey={flashKey} meKey={null} isAdmin onDelete={handleDeletePlayer} sakkoKey={playout?.sakkoKey} excludedKeys={excludedKeys} onToggleExclude={toggleExcluded} />
           </div>
           <div className="side">
-            {t.showPodium && <Podium sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} />}
+            {t.showPodium && <Podium sorted={sortedPublic} onSelect={(p) => setSelectedKey(p.key)} />}
             {t.showBracket && (
               <Bracket
-                sorted={sorted}
+                sorted={sortedPublic}
                 playersMap={playersMap}
                 playoff={playoff}
                 isAdmin={true}
@@ -1827,7 +1882,7 @@ function App() {
             )}
             <PlayoutPanel
               playout={playout}
-              sorted={sorted}
+              sorted={sortedPublic}
               playersMap={playersMap}
               isAdmin={true}
               onStart={handleStartPlayout}
@@ -1858,25 +1913,25 @@ function App() {
 
   return (
     <div className="app">
-      <Header me={me} onLogout={handleLogout} playerCount={sorted.length} today={today} dbBackend={dbBackend} />
+      <Header me={me} onLogout={handleLogout} playerCount={sortedPublic.length} today={today} dbBackend={dbBackend} />
       {t.showTicker && <Ticker items={tickerItems} paused={!t.pulse} />}
       <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
       <TabNav active={activeTab} onChange={setActiveTab} isAdmin={false} />
       {activeTab === 'teamreport' ? (
-        <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sorted.filter(p => p.key !== ADMIN_KEY)} onSaveDay={handleSaveDay} />
+        <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sortedPublic} onSaveDay={handleSaveDay} />
       ) : activeTab === 'report' ? (
         <DailyReport currentKey={currentKey} isAdmin={false} dailyStats={dailyStats} players={sorted} onSaveDay={handleSaveDay} />
       ) : (
       <div className="main">
         <div>
           <MyCard me={me} onAction={performAction} />
-          <Table sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} flashKey={flashKey} meKey={currentKey} sakkoKey={playout?.sakkoKey} />
+          <Table sorted={sortedPublic} onSelect={(p) => setSelectedKey(p.key)} flashKey={flashKey} meKey={currentKey} sakkoKey={playout?.sakkoKey} />
         </div>
         <div className="side">
-          {t.showPodium && <Podium sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} />}
+          {t.showPodium && <Podium sorted={sortedPublic} onSelect={(p) => setSelectedKey(p.key)} />}
           {t.showBracket && (
             <Bracket
-              sorted={sorted}
+              sorted={sortedPublic}
               playersMap={playersMap}
               playoff={playoff}
               isAdmin={false}
@@ -1886,7 +1941,7 @@ function App() {
           {playout?.started && (
             <PlayoutPanel
               playout={playout}
-              sorted={sorted}
+              sorted={sortedPublic}
               playersMap={playersMap}
               isAdmin={false}
             />
@@ -1896,7 +1951,7 @@ function App() {
       </div>
       )}
       <div className="footer-stripe">
-        <div>BUUKKAUSKISA · KAUSI 1 · VOL.&nbsp;I · {sorted.length}&nbsp;PELAAJAA</div>
+        <div>BUUKKAUSKISA · KAUSI 1 · VOL.&nbsp;I · {sortedPublic.length}&nbsp;PELAAJAA</div>
         <div>KLIKKAA RIVIÄ → PELAAJAPROFIILI &nbsp;|&nbsp; PELATAAN VAIN ARKIPÄIVISIN</div>
       </div>
       <PlayerModal

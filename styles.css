@@ -1379,13 +1379,26 @@ input { font: inherit; color: inherit; }
 
 .m-side {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) 16px auto;
+  grid-template-columns: 26px minmax(0, 1fr) auto 16px auto;
   align-items: center;
   gap: 8px;
   padding: 6px 4px;
   border-radius: 2px;
   transition: background .12s ease, opacity .12s ease;
 }
+.m-pts {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; font-weight: 700;
+  color: var(--ink-3);
+  white-space: nowrap;
+  letter-spacing: -.02em;
+}
+.m-pts-label { font-size: 9px; font-weight: 400; margin-left: 2px; opacity: .7; }
+.m-pts.pts-lead { color: var(--accent); }
+.m-lead-ico { font-size: 9px; margin-left: 3px; color: var(--accent); }
+.m-side.leading { background: rgba(255,74,26,.05); }
+.m-card.m-final .m-side.leading { background: rgba(197,151,42,.08); }
+.m-side.leading .m-pts { color: var(--accent); }
 .m-side:hover { background: rgba(20,17,13,.04); }
 .m-card.m-final .m-side:hover { background: rgba(245,243,238,.04); }
 .m-side.winner {
@@ -1893,8 +1906,22 @@ input { font: inherit; color: inherit; }
   line-height: 1.6;
 }
 
-/* Row delete (admin) */
+/* Row delete + exclude (admin) */
 .row { position: relative; }
+.row .row-excl {
+  position: absolute;
+  top: 50%; right: 38px;
+  transform: translateY(-50%);
+  width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; font-size: 14px; line-height: 1;
+  border-radius: 50%; border: none; cursor: pointer;
+  opacity: 0; transition: opacity .12s;
+}
+.row:hover .row-excl { opacity: 1; }
+.row .row-excl.row-excl-on { opacity: .7; }
+.row.row-excluded { opacity: .45; }
+.row.row-excluded .nick::after { content: ' (piilotettu)'; font-size: 11px; color: var(--ink-3); font-weight: 400; }
 .row .row-del {
   position: absolute;
   top: 50%;
