@@ -144,7 +144,7 @@ function LoginScreen({ onLogin, existingPlayers }) {
             <div className="kpi">
               <div className="kpi-lbl">Playoff</div>
               <div className="kpi-val">TOP 8</div>
-              <div className="kpi-sub">8.6 → 11.6</div>
+              <div className="kpi-sub">8.6 → 18.6</div>
             </div>
             <div className="kpi">
               <div className="kpi-lbl">Palkinnot</div>
@@ -555,7 +555,7 @@ function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete, sakkoKey,
           <div className="left">
             <div className="accent-bar" />
             PLAYOFF-RAJA
-            <span style={{ opacity: .55, fontWeight: 500 }}>Top 8 jatkoon · 8.6 — 11.6</span>
+            <span style={{ opacity: .55, fontWeight: 500 }}>Top 8 jatkoon · 8.6 — 18.6</span>
           </div>
           <div className="right">— — — — — — — — — — — —</div>
         </div>
@@ -838,7 +838,7 @@ function Bracket({ sorted, playersMap, playoff, playoffPointsMap, isAdmin, onSel
             onWin={onWin} onUndo={onUndo} onSelect={onSelect}
             highlight
           />
-          <div className="bracket-final-meta">MA 15.6 · MESTARUUS</div>
+          <div className="bracket-final-meta">{COMPETITION.playoffRounds.F.range} · MESTARUUS</div>
         </div>
       </div>
 
@@ -868,9 +868,9 @@ function PhaseBanner({ phase, today, totalDays, playoff, champion }) {
   const map = {
     pre:      { label: 'EI ALKANUT', color: 'gray',   sub: `Alkaa MA 25.5.2026 — ${totalDays} arkipäivää` },
     regular:  { label: 'RUNKOSARJA', color: 'live',   sub: `Päivä ${today}/${totalDays} · runkosarja päättyy PE 5.6 · playoff alkaa MA 8.6` },
-    lock:     { label: 'RUNKOSARJA OHI', color: 'amber', sub: 'Seedit lukittavissa · playoff alkaa MA 8.6 · finaali MA 15.6' },
-    playoffs: { label: 'PLAYOFFIT KÄYNNISSÄ', color: 'live', sub: 'Pudotuspeli · QF 8.6–11.6 · VE 12.6–13.6 · F 14.6–15.6' },
-    finished: { label: 'KISA PÄÄTTYI', color: 'gold', sub: champion ? `Mestari · ${champion.nick}` : 'Loppu — 15.6.2026' },
+    lock:     { label: 'RUNKOSARJA OHI', color: 'amber', sub: 'Seedit lukittavissa · playoff alkaa MA 8.6 · finaali TO 18.6' },
+    playoffs: { label: 'PLAYOFFIT KÄYNNISSÄ', color: 'live', sub: 'Pudotuspeli · QF 8.–9.6 · VE 10.–12.6 · F 15.–18.6' },
+    finished: { label: 'KISA PÄÄTTYI', color: 'gold', sub: champion ? `Mestari · ${champion.nick}` : 'Loppu — 18.6.2026' },
   };
   const m = map[phase] || map.regular;
   const playoffActive = playoff?.started && !champion;
@@ -884,7 +884,7 @@ function PhaseBanner({ phase, today, totalDays, playoff, champion }) {
       <div className="pb-sub">{m.sub}</div>
       <div className="pb-end">
         <span className="pb-end-lbl">VIIMEINEN PÄIVÄ</span>
-        <span className="pb-end-val">15.6.2026</span>
+        <span className="pb-end-val">18.6.2026</span>
       </div>
     </div>
   );
