@@ -180,26 +180,31 @@ function saveCurrentKey(k) {
 
 // ── Päivä/viikko -laskenta — automaattinen ──────────────
 
-// Palauttaa nykyisen arkipäivän indeksin 0..9 tai -1 jos ennen kautta, totalDays+1 jos jälkeen
+// Paikallinen päiväavain YYYY-MM-DD (ei UTC, jotta päivä ei karkaa aikavyöhykkeen takia)
+function localDateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Palauttaa nykyisen kilpailupäivän indeksin koko WEEKDAY_DATE_KEYS-listaan
+// (runkosarja 0..9, playoffit 10..18). -1 jos ennen kautta.
+// Viikonloppuna / aukkopäivänä palautetaan viimeisin mennyt kilpailupäivä.
 function currentWeekdayIndex() {
   const now = new Date();
   if (now < COMPETITION.startDate) return -1;
-  if (now > COMPETITION.endDate) return COMPETITION.totalDays;
-  const today = now.toDateString();
-  for (let i = 0; i < COMPETITION.weekdays.length; i++) {
-    const wd = COMPETITION.weekdays[i];
-    const [d, m] = wd.date.split('.');
-    const dt = new Date(2026, parseInt(m, 10) - 1, parseInt(d, 10));
-    if (dt.toDateString() === today) return i;
+  const todayKey = localDateKey(now);
+  // Tarkka osuma kilpailupäivään (myös playoff-päivät)
+  const exact = WEEKDAY_DATE_KEYS.indexOf(todayKey);
+  if (exact >= 0) return exact;
+  // Ei tarkkaa osumaa (viikonloppu/aukko) → viimeisin jo mennyt kilpailupäivä
+  let last = -1;
+  for (let i = 0; i < WEEKDAY_DATE_KEYS.length; i++) {
+    const dt = new Date(WEEKDAY_DATE_KEYS[i] + 'T00:00:00');
+    if (dt <= now) last = i; else break;
   }
-  // Päivä on viikonloppu tai muu — palauta seuraavan / edellisen arkipäivän indeksi
-  for (let i = 0; i < COMPETITION.weekdays.length; i++) {
-    const wd = COMPETITION.weekdays[i];
-    const [d, m] = wd.date.split('.');
-    const dt = new Date(2026, parseInt(m, 10) - 1, parseInt(d, 10));
-    if (dt > now) return Math.max(0, i - 1); // edellinen arkipäivä
-  }
-  return COMPETITION.totalDays - 1;
+  return last >= 0 ? last : COMPETITION.totalDays;
 }
 
 // Kuluvan viikon päivät (5 päivää) — viikko 1 tai 2
@@ -291,6 +296,7 @@ Object.assign(window, {
   LS_CURRENT,
   playerKey, emptyStats,
   loadCurrentKey, saveCurrentKey,
+  localDateKey,
   currentWeekdayIndex, currentWeekDays, currentDayNumber,
   competitionPhase,
   EMPTY_PLAYOFF, MATCH_ORDER,
