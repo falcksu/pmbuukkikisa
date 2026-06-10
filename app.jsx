@@ -734,7 +734,7 @@ function MatchCard({
   );
 }
 
-function Bracket({ sorted, playersMap, playoff, playoffPointsMap, isAdmin, onSelect, onWin, onUndo, onStart, onReset }) {
+function Bracket({ sorted, playersMap, playoff, playoffPointsMap, roundPointsMaps, isAdmin, onSelect, onWin, onUndo, onStart, onReset }) {
   const started = !!playoff?.started;
 
   let matches;
@@ -797,7 +797,7 @@ function Bracket({ sorted, playersMap, playoff, playoffPointsMap, isAdmin, onSel
             <MatchCard
               key={id} matchId={id} label={id}
               match={matches[id]}
-              playersMap={playersMap} playoffPointsMap={playoffPointsMap}
+              playersMap={playersMap} playoffPointsMap={roundPointsMaps?.QF ?? playoffPointsMap}
               isAdmin={isAdmin} started={started}
               onWin={onWin} onUndo={onUndo} onSelect={onSelect}
             />
@@ -812,14 +812,14 @@ function Bracket({ sorted, playersMap, playoff, playoffPointsMap, isAdmin, onSel
           <MatchCard
             matchId="SF1" label="VE 1"
             match={matches.SF1}
-            playersMap={playersMap} playoffPointsMap={playoffPointsMap}
+            playersMap={playersMap} playoffPointsMap={roundPointsMaps?.SF ?? playoffPointsMap}
             isAdmin={isAdmin} started={started}
             onWin={onWin} onUndo={onUndo} onSelect={onSelect}
           />
           <MatchCard
             matchId="SF2" label="VE 2"
             match={matches.SF2}
-            playersMap={playersMap} playoffPointsMap={playoffPointsMap}
+            playersMap={playersMap} playoffPointsMap={roundPointsMaps?.SF ?? playoffPointsMap}
             isAdmin={isAdmin} started={started}
             onWin={onWin} onUndo={onUndo} onSelect={onSelect}
           />
@@ -833,7 +833,7 @@ function Bracket({ sorted, playersMap, playoff, playoffPointsMap, isAdmin, onSel
           <MatchCard
             matchId="F" label="FINAALI"
             match={matches.F}
-            playersMap={playersMap} playoffPointsMap={playoffPointsMap}
+            playersMap={playersMap} playoffPointsMap={roundPointsMaps?.F ?? playoffPointsMap}
             isAdmin={isAdmin} started={started}
             onWin={onWin} onUndo={onUndo} onSelect={onSelect}
             highlight
@@ -1581,11 +1581,31 @@ function App() {
     return decoratePlayers(filtered);
   }, [playersMap, excludedKeys]);
 
-  // Playoff-kauden pisteet erikseen (8.6→) — bracket ja playout näyttävät nämä
+  // Kierroskohtaiset pisteet — kukin kierros alkaa nollista
+  // QF: indeksit 10–11 (8.–9.6), SF: 12–14 (10.–12.6), F: 15–18 (15.–18.6)
+  const roundPointsMaps = useMemo(() => {
+    const buildMap = (minIdx, maxIdx) => {
+      const map = {};
+      dailyStats.forEach(r => {
+        const idx = dateKeyToWeekdayIndex(r.date_key);
+        if (idx >= minIdx && idx <= maxIdx) {
+          map[r.player_id] = (map[r.player_id] || 0) + (r.buukit || 0);
+        }
+      });
+      return map;
+    };
+    return {
+      QF: buildMap(10, 11),   // 8.–9.6
+      SF: buildMap(12, 14),   // 10.–12.6
+      F:  buildMap(15, 18),   // 15.–18.6
+    };
+  }, [dailyStats]);
+
+  // Koko playoff-kauden pisteet playout-rankingiin
   const playoffPointsMap = useMemo(() => {
     const map = {};
     dailyStats.forEach(r => {
-      if (dateKeyToWeekdayIndex(r.date_key) >= 10) { // vain playoff-päivät
+      if (dateKeyToWeekdayIndex(r.date_key) >= 10) {
         map[r.player_id] = (map[r.player_id] || 0) + (r.buukit || 0);
       }
     });
@@ -1900,6 +1920,7 @@ function App() {
                 playersMap={playersMap}
                 playoff={playoff}
                 playoffPointsMap={playoffPointsMap}
+                roundPointsMaps={roundPointsMaps}
                 isAdmin={true}
                 onSelect={(p) => setSelectedKey(p.key)}
                 onWin={handleSetWinner}
@@ -1965,6 +1986,7 @@ function App() {
               playersMap={playersMap}
               playoff={playoff}
               playoffPointsMap={playoffPointsMap}
+              roundPointsMaps={roundPointsMaps}
               isAdmin={false}
               onSelect={(p) => setSelectedKey(p.key)}
             />
