@@ -1379,23 +1379,34 @@ input { font: inherit; color: inherit; }
 
 .m-side {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) auto 16px 28px;
+  grid-template-columns: 22px 1fr 28px;
   align-items: center;
   gap: 6px;
-  padding: 6px 4px;
+  padding: 7px 6px;
   border-radius: 2px;
   transition: background .12s ease, opacity .12s ease;
 }
+/* Nimi + pisteet pystysuuntaan */
+.m-name-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.m-action {
+  display: flex; align-items: center; justify-content: flex-end;
+  flex-shrink: 0;
+}
 .m-pts {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px; font-weight: 700;
+  font-size: 11px; font-weight: 700;
   color: var(--ink-3);
   white-space: nowrap;
-  letter-spacing: -.02em;
+  letter-spacing: -.01em;
+  line-height: 1;
 }
-.m-pts-label { font-size: 9px; font-weight: 400; margin-left: 2px; opacity: .7; }
 .m-pts.pts-lead { color: var(--accent); }
-.m-lead-ico { font-size: 9px; margin-left: 3px; color: var(--accent); }
+.m-lead-ico { font-size: 9px; color: var(--accent); }
 .m-side.leading { background: rgba(255,74,26,.05); }
 .m-card.m-final .m-side.leading { background: rgba(197,151,42,.08); }
 .m-side.leading .m-pts { color: var(--accent); }
@@ -1433,10 +1444,12 @@ input { font: inherit; color: inherit; }
 .m-card.m-final .m-side.winner .m-nick { color: var(--gold); }
 .m-ico {
   font-family: 'Barlow Condensed', sans-serif;
-  font-weight: 800;
-  font-size: 14px;
+  font-weight: 900;
+  font-size: 15px;
   color: var(--green);
   text-align: center;
+  width: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .m-card.m-final .m-ico { color: var(--gold); }
 

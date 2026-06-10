@@ -676,26 +676,33 @@ function MatchCard({
         onClick={() => clickable && onSelect(player)}
         style={{ cursor: clickable ? 'pointer' : 'default' }}
       >
-        {seed != null && <span className="m-seed">S{seed}</span>}
-        <span className="m-nick">
-          {player ? player.nick : '—'}
-        </span>
-        {player && started && !(isAdmin && ready) && (
-          <span className={cls('m-pts', isLeading && 'pts-lead')}>
-            {pts}<span className="m-pts-label">pts</span>
-            {isLeading && <span className="m-lead-ico">▲</span>}
-          </span>
-        )}
-        <span className="m-ico">{isWinner ? '✓' : ''}</span>
-        {isAdmin && ready && player && (
-          <button
-            className="m-pick"
-            onClick={(e) => { e.stopPropagation(); onWin(matchId, side); }}
-            title={`Aseta voittajaksi: ${player.nick} (${pts} pts)`}
-          >
-            ✓
-          </button>
-        )}
+        {/* Sarake 1: sijoitusnumero */}
+        {seed != null
+          ? <span className="m-seed">S{seed}</span>
+          : <span className="m-seed" />
+        }
+        {/* Sarake 2: nimi + pisteet */}
+        <div className="m-name-col">
+          <span className="m-nick">{player ? player.nick : '—'}</span>
+          {player && started && (
+            <span className={cls('m-pts', isLeading && 'pts-lead')}>
+              {pts} pts{isLeading && <span className="m-lead-ico"> ▲</span>}
+            </span>
+          )}
+        </div>
+        {/* Sarake 3: toiminto tai voittajamerkki */}
+        <div className="m-action">
+          {isAdmin && ready && player
+            ? <button
+                className="m-pick"
+                onClick={(e) => { e.stopPropagation(); onWin(matchId, side); }}
+                title={`Voittaja: ${player.nick} (${pts} pts)`}
+              >✓</button>
+            : isWinner
+              ? <span className="m-ico">✓</span>
+              : null
+          }
+        </div>
       </div>
     );
   };
