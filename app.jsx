@@ -680,7 +680,7 @@ function MatchCard({
         <span className="m-nick">
           {player ? player.nick : '—'}
         </span>
-        {player && started && (
+        {player && started && !(isAdmin && ready) && (
           <span className={cls('m-pts', isLeading && 'pts-lead')}>
             {pts}<span className="m-pts-label">pts</span>
             {isLeading && <span className="m-lead-ico">▲</span>}
@@ -691,9 +691,9 @@ function MatchCard({
           <button
             className="m-pick"
             onClick={(e) => { e.stopPropagation(); onWin(matchId, side); }}
-            title={`Aseta voittajaksi: ${player.nick}`}
+            title={`Aseta voittajaksi: ${player.nick} (${pts} pts)`}
           >
-            VOITTAJA
+            ✓
           </button>
         )}
       </div>
