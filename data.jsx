@@ -74,10 +74,11 @@ const EMPTY_PLAYOFF = {
     SF1: { round: 'SF', from: ['QF1', 'QF2'], homeKey: null, awayKey: null, winnerKey: null },
     SF2: { round: 'SF', from: ['QF3', 'QF4'], homeKey: null, awayKey: null, winnerKey: null },
     F:   { round: 'F',  from: ['SF1', 'SF2'], homeKey: null, awayKey: null, winnerKey: null },
+    B:   { round: 'B',  from: ['SF1', 'SF2'], loser: true,   homeKey: null, awayKey: null, winnerKey: null },
   },
 };
 
-const MATCH_ORDER = ['QF1', 'QF2', 'QF3', 'QF4', 'SF1', 'SF2', 'F'];
+const MATCH_ORDER = ['QF1', 'QF2', 'QF3', 'QF4', 'SF1', 'SF2', 'F', 'B'];
 
 function recomputeAdvancement(playoff) {
   // Etenee voittajat seuraavaan kierrokseen
@@ -92,6 +93,11 @@ function recomputeAdvancement(playoff) {
   ensure('SF1', m.QF1.winnerKey, m.QF2.winnerKey);
   ensure('SF2', m.QF3.winnerKey, m.QF4.winnerKey);
   ensure('F',   m.SF1.winnerKey, m.SF2.winnerKey);
+
+  // Pronssiottelu: VE-häviäjät (loser = se joka EI ole winnerKey)
+  const loser = (match) => !match.winnerKey ? null
+    : match.winnerKey === match.homeKey ? match.awayKey : match.homeKey;
+  ensure('B', loser(m.SF1), loser(m.SF2));
 
   // Mestari
   const championKey = m.F.winnerKey;

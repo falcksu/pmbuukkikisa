@@ -1543,6 +1543,30 @@ input { font: inherit; color: inherit; }
   margin-top: 4px;
 }
 
+/* ── Pronssiottelu ────────────────────────────────── */
+.bracket-bronze-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #b87333;
+  text-align: center;
+  margin-top: 18px;
+  margin-bottom: 4px;
+  opacity: .9;
+}
+.m-card.m-bronze {
+  border-color: rgba(184, 115, 51, .45);
+  background: linear-gradient(160deg, rgba(184,115,51,.08) 0%, var(--bg-2) 100%);
+}
+.m-card.m-bronze .m-header {
+  color: #b87333;
+  border-bottom-color: rgba(184,115,51,.25);
+}
+.m-card.m-bronze .m-side.winner .m-nick { color: #cd7f32; }
+.m-card.m-bronze .m-side.winner .m-ico  { color: #cd7f32; }
+
 .bracket-tools {
   margin-top: 14px;
   padding-top: 14px;

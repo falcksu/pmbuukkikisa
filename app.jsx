@@ -649,7 +649,7 @@ function MatchCard({
   playoffPointsMap,
   isAdmin, started,
   onWin, onUndo, onSelect,
-  highlight,
+  highlight, bronze,
 }) {
   const home = match.homeKey ? playersMap[match.homeKey] : null;
   const away = match.awayKey ? playersMap[match.awayKey] : null;
@@ -708,7 +708,7 @@ function MatchCard({
   };
 
   return (
-    <div className={cls('m-card', `m-${status}`, highlight && 'm-final', decided && 'm-decided')}>
+    <div className={cls('m-card', `m-${status}`, highlight && 'm-final', bronze && 'm-bronze', decided && 'm-decided')}>
       <div className="m-head">
         <span className="m-id">{label || matchId}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -846,6 +846,22 @@ function Bracket({ sorted, playersMap, playoff, playoffPointsMap, roundPointsMap
             highlight
           />
           <div className="bracket-final-meta">{COMPETITION.playoffRounds.F.range} · MESTARUUS</div>
+
+          {/* Pronssiottelu — VE-häviäjät, samat päivät kuin finaali */}
+          {started && matches.B && (
+            <>
+              <div className="bracket-bronze-label">🥉 PRONSSIOTTELU · 3. SIJA</div>
+              <MatchCard
+                matchId="B" label="3. SIJA"
+                match={matches.B}
+                playersMap={playersMap} playoffPointsMap={roundPointsMaps?.F ?? playoffPointsMap}
+                isAdmin={isAdmin} started={started}
+                onWin={onWin} onUndo={onUndo} onSelect={onSelect}
+                bronze
+              />
+              <div className="bracket-final-meta" style={{opacity:.6}}>{COMPETITION.playoffRounds.F.range} · PRONSSI</div>
+            </>
+          )}
         </div>
       </div>
 

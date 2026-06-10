@@ -1,0 +1,1670 @@
+<!doctype html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sales Dashboard 2.0 — Suunnitelma</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink:    #14110d;
+      --ink-2:  #2e2a24;
+      --ink-3:  #6b6358;
+      --ink-4:  #a89f94;
+      --bg:     #f5f3ee;
+      --bg-2:   #edeae3;
+      --bg-3:   #e3dfd7;
+      --line:   #d4cfc6;
+      --red:    #c4391b;
+      --accent: #ff4a1a;
+      --green:  #1a8a3e;
+      --gold:   #c5972a;
+      --blue:   #1c64f2;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    /* ── Header ── */
+    .page-header {
+      background: var(--ink);
+      color: #f5f3ee;
+      padding: 48px 48px 40px;
+      position: relative;
+      overflow: hidden;
+    }
+    .page-header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--gold) 50%, var(--accent) 100%);
+    }
+    .header-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: .12em;
+      color: var(--ink-4);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .header-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: clamp(36px, 5vw, 64px);
+      font-weight: 900;
+      letter-spacing: -.01em;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+    .header-title .accent { color: var(--accent); }
+    .header-sub {
+      margin-top: 12px;
+      font-size: 15px;
+      color: #b8b0a6;
+      max-width: 640px;
+    }
+    .header-meta {
+      margin-top: 20px;
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .meta-chip {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: .08em;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      padding: 4px 10px;
+      color: #d4cfc6;
+    }
+
+    /* ── Layout ── */
+    .content {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 48px 32px 80px;
+    }
+
+    /* ── Section ── */
+    .section {
+      margin-bottom: 56px;
+    }
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--ink);
+    }
+    .section-num {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      color: var(--accent);
+      background: rgba(255,74,26,.1);
+      padding: 2px 8px;
+      border: 1px solid rgba(255,74,26,.25);
+    }
+    .section-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+    }
+    .section-body {
+      color: var(--ink-2);
+    }
+
+    /* ── Info box ── */
+    .info-box {
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: var(--ink-2);
+    }
+    .info-box strong { color: var(--ink); }
+
+    /* ── Time range UI mockup ── */
+    .mockup-bar {
+      background: var(--ink);
+      color: #f5f3ee;
+      padding: 18px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+    .mock-btn {
+      padding: 5px 12px;
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.15);
+      color: #d4cfc6;
+      cursor: default;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .06em;
+    }
+    .mock-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .mock-label {
+      color: #6b6358;
+      margin-right: 4px;
+      font-size: 11px;
+    }
+
+    /* ── Badge grid ── */
+    .badge-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .badge-card {
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      padding: 14px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .badge-ico {
+      font-size: 24px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .badge-info {}
+    .badge-name {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 800;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .badge-desc {
+      font-size: 12px;
+      color: var(--ink-3);
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+
+    /* ── Goal bar mockup ── */
+    .goal-mockup {
+      background: var(--ink);
+      color: #f5f3ee;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .goal-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .goal-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      color: #a89f94;
+    }
+    .goal-nums {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--accent);
+    }
+    .goal-track {
+      height: 10px;
+      background: rgba(255,255,255,.1);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .goal-fill {
+      height: 100%;
+      width: 71%;
+      background: linear-gradient(90deg, var(--accent), #ff8a5c);
+      border-radius: 2px;
+    }
+    .goal-meta {
+      display: flex;
+      gap: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: #6b6358;
+    }
+    .goal-meta span { color: #a89f94; }
+
+    /* ── Priority table ── */
+    .priority-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    .priority-table th {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 8px 14px;
+      background: var(--ink);
+      color: #d4cfc6;
+      border-bottom: 2px solid var(--accent);
+    }
+    .priority-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      vertical-align: top;
+    }
+    .priority-table tr:nth-child(even) td { background: var(--bg-2); }
+    .phase-num {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 900;
+      font-size: 22px;
+      color: var(--accent);
+      width: 40px;
+    }
+    .phase-what { font-weight: 600; color: var(--ink); }
+    .phase-why { font-size: 13px; color: var(--ink-3); margin-top: 2px; }
+    .phase-effort {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+    .effort-s { background: rgba(26,138,62,.15); color: var(--green); }
+    .effort-m { background: rgba(197,151,42,.15); color: var(--gold); }
+    .effort-l { background: rgba(196,57,27,.15); color: var(--red); }
+
+    /* ── Architecture ── */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    @media (max-width: 640px) { .arch-grid { grid-template-columns: 1fr; } }
+    .arch-card {
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+    }
+    .arch-card.now { background: var(--bg-2); border-color: var(--line); }
+    .arch-card.future { background: #fff; border-color: var(--accent); border-left-width: 3px; }
+    .arch-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      color: var(--ink-3);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .arch-card.future .arch-label { color: var(--accent); }
+    .arch-item {
+      font-size: 13px;
+      color: var(--ink-2);
+      padding: 5px 0;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .arch-item:last-child { border-bottom: none; }
+    .arch-item::before { content: '→'; color: var(--ink-4); flex-shrink: 0; font-size: 11px; margin-top: 2px; }
+    .arch-card.future .arch-item::before { content: '✓'; color: var(--green); }
+
+    /* ── DB tables ── */
+    .db-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .db-card {
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      padding: 14px 16px;
+    }
+    .db-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .db-field {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-3);
+      padding: 2px 0;
+    }
+    .db-field span { color: var(--blue); }
+
+    /* ── UI mockup ── */
+    .ui-mockup {
+      background: var(--ink);
+      color: #d4cfc6;
+      padding: 20px 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.8;
+      overflow-x: auto;
+      white-space: pre;
+      margin-bottom: 20px;
+    }
+    .ui-mockup .hl { color: var(--accent); }
+    .ui-mockup .hl2 { color: var(--gold); }
+    .ui-mockup .dim { color: #4a453f; }
+
+    /* ── H2H mockup ── */
+    .h2h-mockup {
+      background: var(--bg-2);
+      border: 2px solid var(--ink);
+      padding: 20px 24px;
+      max-width: 320px;
+      text-align: center;
+    }
+    .h2h-tag {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .h2h-players {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+    .h2h-nick {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 20px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .h2h-pts {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .h2h-pts.trail { color: var(--ink-3); }
+    .h2h-vs {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--ink-3);
+    }
+    .h2h-meta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--ink-3);
+      margin-top: 8px;
+    }
+
+    /* ── Preserved note ── */
+    .preserve-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .preserve-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--ink-2);
+    }
+    .preserve-item::before {
+      content: '✓';
+      color: var(--green);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ── Footer ── */
+    .page-footer {
+      background: var(--ink-2);
+      color: #6b6358;
+      text-align: center;
+      padding: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: .06em;
+    }
+    .page-footer strong { color: #a89f94; }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .page-header { padding: 32px 20px 28px; }
+      .content { padding: 32px 16px 60px; }
+      .section-title { font-size: 20px; }
+    }
+
+    /* ════════════════════════════════════════
+       BADGE SYSTEM UI
+    ════════════════════════════════════════ */
+
+    .bs-label {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 12px; font-weight: 800;
+      letter-spacing: .12em; text-transform: uppercase;
+      color: var(--ink-3); margin-bottom: 14px;
+    }
+
+    /* ── Tier row ── */
+    .tier-row {
+      display: flex; align-items: stretch; gap: 0;
+      overflow-x: auto; padding-bottom: 4px;
+    }
+    .tier-sep {
+      display: flex; align-items: center;
+      color: var(--ink-4); font-size: 18px; padding: 0 4px;
+      flex-shrink: 0;
+    }
+    .tier-card {
+      flex: 1; min-width: 130px;
+      border: 2px solid var(--line);
+      padding: 18px 14px 16px;
+      text-align: center;
+      background: var(--bg-2);
+      position: relative;
+    }
+    .tier-ico   { font-size: 28px; line-height: 1; margin-bottom: 6px; }
+    .tier-name  { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 16px; letter-spacing: .1em; margin-bottom: 8px; }
+    .tier-req   { font-size: 12px; color: var(--ink-3); margin-bottom: 8px; line-height: 1.4; }
+    .tier-perks { font-size: 11px; color: var(--ink-4); line-height: 1.5; border-top: 1px solid var(--line); padding-top: 8px; }
+
+    .tier-bronze { border-top: 3px solid #a0684a; }
+    .tier-bronze .tier-name { color: #a0684a; }
+    .tier-silver { border-top: 3px solid #8a9aaa; }
+    .tier-silver .tier-name { color: #5a7080; }
+    .tier-gold   { border-top: 3px solid var(--gold); background: #fffbe8; }
+    .tier-gold .tier-name { color: var(--gold); }
+    .tier-plat   { border-top: 3px solid #4a90c4; background: #f0f6ff; }
+    .tier-plat .tier-name { color: #2a6a9a; }
+    .tier-legend { border-top: 3px solid #7c4dbf; background: #f8f0ff; }
+    .tier-legend .tier-name { color: #5c2d9a; }
+
+    /* ── Tier progress ── */
+    .tier-progress-wrap {
+      background: var(--ink); color: #f5f3ee;
+      padding: 20px 24px; margin-bottom: 12px;
+    }
+    .tp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+    .tp-left, .tp-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .tp-tier-badge {
+      font-family: 'Barlow Condensed', sans-serif; font-size: 13px; font-weight: 800;
+      padding: 3px 10px; letter-spacing: .06em;
+    }
+    .tier-gold-inline { background: rgba(197,151,42,.25); color: var(--gold); }
+    .tier-plat-inline { background: rgba(74,144,196,.2); color: #4a90c4; }
+    .tp-pts { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--accent); }
+    .tp-next { font-size: 12px; color: #6b6358; }
+    .tp-remaining { font-size: 12px; color: #6b6358; }
+    .tp-track {
+      height: 14px; background: rgba(255,255,255,.1); border-radius: 2px;
+      position: relative; overflow: visible; margin-bottom: 24px;
+    }
+    .tp-fill {
+      height: 100%; background: linear-gradient(90deg, var(--gold), var(--accent));
+      border-radius: 2px; display: flex; align-items: center; justify-content: flex-end;
+      padding-right: 6px; position: relative;
+    }
+    .tp-pct { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #fff; font-weight: 700; }
+    .tp-milestones { position: absolute; top: 20px; left: 0; right: 0; pointer-events: none; }
+    .tp-milestone {
+      position: absolute; transform: translateX(-50%);
+      text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #4a453f;
+      line-height: 1.3;
+    }
+    .tp-milestone.achieved { color: var(--gold); }
+    .tp-milestone.next { color: #4a90c4; }
+    .tp-milestone::before { content: '|'; display: block; font-size: 12px; margin-bottom: 2px; }
+
+    /* ── Badge catalog ── */
+    .bc-tier-label {
+      font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 800;
+      letter-spacing: .07em; padding: 8px 14px; margin-bottom: 12px;
+      border-left: 4px solid var(--line);
+    }
+    .bronze-label { border-left-color: #a0684a; background: rgba(160,104,74,.07); color: #7a4a2a; }
+    .silver-label { border-left-color: #8a9aaa; background: rgba(138,154,170,.07); color: #3a5a70; }
+    .gold-label   { border-left-color: var(--gold); background: rgba(197,151,42,.08); color: #8a6a10; }
+    .plat-label   { border-left-color: #4a90c4; background: rgba(74,144,196,.08); color: #1a5a94; }
+
+    .bc-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 10px; margin-bottom: 4px;
+    }
+    .bc-card {
+      border: 1px solid var(--line); padding: 14px 15px;
+      position: relative;
+    }
+    .bc-card.earned   { background: #fff; border-color: var(--green); border-top-width: 3px; }
+    .bc-card.in-progress { background: var(--bg-2); border-color: var(--gold); border-top-width: 3px; }
+    .bc-card.locked   { background: var(--bg-2); opacity: .65; }
+    .bc-card.tier-locked-plat { border-left: 3px solid #4a90c4; }
+    .bc-card.tier-locked-legend { border-left: 3px solid #7c4dbf; }
+
+    .bc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+    .bc-ico { font-size: 22px; line-height: 1; }
+    .bc-ico.locked-ico { filter: grayscale(1); opacity: .5; }
+    .bc-earned-tag   { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: .08em; color: var(--green); background: rgba(26,138,62,.12); padding: 2px 6px; }
+    .bc-progress-tag { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: .06em; color: var(--gold); background: rgba(197,151,42,.12); padding: 2px 6px; }
+    .bc-locked-tag   { font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: .06em; color: var(--ink-4); background: rgba(0,0,0,.06); padding: 2px 6px; }
+    .plat-tag   { color: #4a90c4 !important; background: rgba(74,144,196,.12) !important; }
+    .legend-tag { color: #7c4dbf !important; background: rgba(124,77,191,.12) !important; }
+
+    .bc-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink); margin-bottom: 3px; }
+    .bc-cond { font-size: 11px; color: var(--ink-3); line-height: 1.4; margin-bottom: 10px; }
+    .bc-prog-wrap { display: flex; align-items: center; gap: 8px; }
+    .bc-prog-bar  { flex: 1; height: 5px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+    .bc-prog-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width .4s; }
+    .bc-prog-fill.accent-fill { background: var(--accent); }
+    .bc-prog-fill.locked-fill { background: var(--ink-4); }
+    .bc-prog-txt  { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-3); white-space: nowrap; flex-shrink: 0; }
+
+    /* ── Player profile ── */
+    .profile-view {
+      display: grid; grid-template-columns: 260px 1fr;
+      gap: 0; border: 2px solid var(--ink);
+      background: #fff;
+    }
+    @media (max-width: 780px) { .profile-view { grid-template-columns: 1fr; } }
+
+    .pv-identity {
+      background: var(--ink); color: #f5f3ee;
+      padding: 28px 24px;
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center;
+      border-right: 2px solid #2e2a24;
+    }
+    .pv-avatar-wrap { position: relative; margin-bottom: 12px; }
+    .pv-avatar {
+      width: 68px; height: 68px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 24px;
+      color: #14110d; letter-spacing: -.02em;
+    }
+    .gold-ring { background: var(--gold); box-shadow: 0 0 0 3px #c5972a55, 0 0 0 6px #c5972a22; }
+    .pv-tier-pip {
+      position: absolute; bottom: -4px; right: -4px;
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--ink); border: 2px solid var(--gold);
+      display: flex; align-items: center; justify-content: center; font-size: 12px;
+    }
+    .pv-name  { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 26px; letter-spacing: .06em; text-transform: uppercase; }
+    .pv-city  { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #6b6358; letter-spacing: .08em; margin-bottom: 8px; }
+    .gold-title { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 800; letter-spacing: .1em; color: var(--gold); background: rgba(197,151,42,.15); padding: 3px 12px; margin-bottom: 18px; }
+
+    .pv-tier-prog { width: 100%; margin-bottom: 18px; }
+    .pv-tp-label { display: flex; justify-content: space-between; font-size: 11px; color: #6b6358; margin-bottom: 5px; font-family: 'JetBrains Mono', monospace; }
+    .pv-tp-pct { color: var(--accent); font-weight: 700; }
+    .pv-tp-track { height: 6px; background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; margin-bottom: 4px; }
+    .pv-tp-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--accent)); border-radius: 2px; }
+    .pv-tp-sub { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #4a453f; }
+
+    .pv-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+    .pv-stat { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); padding: 8px 10px; text-align: center; }
+    .pv-stat-v { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 22px; color: #f5f3ee; line-height: 1; }
+    .pv-stat-l { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #4a453f; letter-spacing: .06em; margin-top: 2px; }
+
+    .pv-badges { padding: 24px 24px; }
+    .pv-badges-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 18px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 16px; }
+    .pv-count { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 400; color: var(--ink-3); letter-spacing: 0; }
+
+    .pv-badge-section-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+      letter-spacing: .1em; color: var(--ink-4); text-transform: uppercase; margin-bottom: 10px;
+    }
+    .pv-badge-shelf { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+    .pv-badge {
+      width: 72px; text-align: center; padding: 10px 6px 8px;
+      border: 1px solid var(--line); cursor: default;
+    }
+    .earned-badge { background: #fff; border-color: var(--green); }
+    .featured-badge { border-color: var(--gold); background: #fffbe8; box-shadow: 0 0 0 2px rgba(197,151,42,.3); }
+    .locked-badge { background: var(--bg-2); opacity: .5; }
+    .locked-badge.tier-locked-plat { border-left: 2px solid #4a90c4; }
+    .locked-badge.tier-locked-legend { border-left: 2px solid #7c4dbf; }
+
+    .pvb-ico  { font-size: 20px; line-height: 1; margin-bottom: 5px; }
+    .locked-ico { filter: grayscale(1); opacity: .5; }
+    .pvb-name { font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; line-height: 1.2; color: var(--ink); }
+    .pvb-when { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--green); margin-top: 2px; }
+
+    .pv-progress-list { display: flex; flex-direction: column; gap: 8px; }
+    .pv-prog-item { display: flex; align-items: center; gap: 10px; background: var(--bg-2); padding: 9px 12px; border: 1px solid var(--line); }
+    .pv-prog-ico { font-size: 16px; flex-shrink: 0; }
+    .pv-prog-mid { flex: 1; min-width: 0; }
+    .pv-prog-name { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+    .pv-prog-bar-wrap {}
+    .pv-prog-bar  { height: 5px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+    .pv-prog-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+    .pv-prog-frac { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent); font-weight: 700; flex-shrink: 0; white-space: nowrap; }
+
+    .locked-shelf { opacity: .7; }
+  </style>
+</head>
+<body>
+
+<!-- ─── Header ─────────────────────────── -->
+<header class="page-header">
+  <div class="header-tag">Buukkauskisa · Kehityssuunnitelma</div>
+  <h1 class="header-title">Sales Dashboard <span class="accent">2.0</span></h1>
+  <p class="header-sub">
+    Suunnitelma kilpailupohjaisen buukkausseuraimen kasvattamiseksi pysyväksi myynnin
+    seurantanäytöksi, jossa on aikarajasuodatus, tiimitavoitteet ja gamification.
+  </p>
+  <div class="header-meta">
+    <div class="meta-chip">LAADITTU 8.6.2026</div>
+    <div class="meta-chip">VERSIO 1.0</div>
+    <div class="meta-chip">ALUSTA: REACT + SUPABASE</div>
+  </div>
+</header>
+
+<div class="content">
+
+  <!-- ─── Mikä säilyy ─────────────────────────── -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">✓ POHJA</span>
+      <h2 class="section-title">Mikä nykyisestä on hyvää ja säilyy</h2>
+    </div>
+    <div class="section-body">
+      <p style="margin-bottom:16px;color:var(--ink-3)">Nämä komponentit toimivat jo hyvin — ei tarvetta uudelleenrakentaa.</p>
+      <div class="preserve-grid">
+        <div class="preserve-item">Reaaliaikainen Supabase-sync</div>
+        <div class="preserve-item">daily_stats-taulurakenne</div>
+        <div class="preserve-item">Leaderboard-pohja</div>
+        <div class="preserve-item">Salasanaportti + kirjautuminen</div>
+        <div class="preserve-item">Luurit / Vastatut / Buukit -malli</div>
+        <div class="preserve-item">Putki- ja trendi-indikaattorit</div>
+        <div class="preserve-item">Admin-hallintapaneeli</div>
+        <div class="preserve-item">Mobiiliresponsiivisuus</div>
+      </div>
+      <div class="info-box" style="margin-top:20px">
+        <strong>Avainhuomio:</strong> Nykyinen <code>daily_stats</code>-taulu (player_id, date_key, luurit, vastatut, buukit)
+        on <strong>täydellinen perusta</strong> kaikelle aikarajasuodatukselle. Tietokantarakenteeseen
+        ei tarvita suuria muutoksia — kaikki tilastot lasketaan suoraan päivätason riveistä.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Aikarajasuodatus ─────────────────────────── -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">01</span>
+      <h2 class="section-title">Aikarajasuodatus</h2>
+    </div>
+    <div class="section-body">
+      <p style="margin-bottom:16px">
+        Sivusto tietää aina nykyisen päivän ja laskee kuukauden/vuoden rajat automaattisesti.
+        Kaikki luvut päivittyvät välittömästi kun käyttäjä vaihtaa aikaväliä.
+      </p>
+
+      <p style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.08em;color:var(--ink-3);text-transform:uppercase;margin-bottom:8px;">Näkymä käyttäjälle — valintapalkki</p>
+      <div class="mockup-bar">
+        <span class="mock-label">AJANJAKSO:</span>
+        <button class="mock-btn">Tänään</button>
+        <button class="mock-btn">Tämä viikko</button>
+        <button class="mock-btn active">Tämä kuukausi</button>
+        <button class="mock-btn">Viime kuukausi</button>
+        <button class="mock-btn">Tämä vuosi</button>
+        <button class="mock-btn">Viime vuosi</button>
+        <button class="mock-btn">▼ Oma aikaväli</button>
+      </div>
+
+      <p style="margin-bottom:12px">Valittavat aikavaihtoehdot:</p>
+      <div class="badge-grid" style="margin-top:0">
+        <div class="badge-card">
+          <div class="badge-ico">📅</div>
+          <div class="badge-info">
+            <div class="badge-name">Tänään</div>
+            <div class="badge-desc">Vain kuluvan päivän tilastot. Hyvä päiväpalaverin näytöksi.</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">📆</div>
+          <div class="badge-info">
+            <div class="badge-name">Tämä / viime viikko</div>
+            <div class="badge-desc">Ma–Pe. Vertailu edelliseen viikkoon automaattisesti.</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">🗓️</div>
+          <div class="badge-info">
+            <div class="badge-name">Tämä / viime kuukausi</div>
+            <div class="badge-desc">Kalenterikuukausi. Tärkeimmät suodattimet kuukausiseurannassa.</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">📊</div>
+          <div class="badge-info">
+            <div class="badge-name">Tämä / viime vuosi</div>
+            <div class="badge-desc">Koko vuoden yhteenveto. Hyvä johdon näkymäksi.</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">🔎</div>
+          <div class="badge-info">
+            <div class="badge-name">Oma aikaväli</div>
+            <div class="badge-desc">Vapaa päivämääräväli kalenterivalikolla. Esim. kvartaalivertailu.</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">🏆</div>
+          <div class="badge-info">
+            <div class="badge-name">Kausi (kilpailu)</div>
+            <div class="badge-desc">Näyttää valitun kilpailukauden tilastot, esim. Kausi 1.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Tiimitavoite ─────────────────────────── -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">02</span>
+      <h2 class="section-title">Tiimitavoite</h2>
+    </div>
+    <div class="section-body">
+      <p style="margin-bottom:16px">
+        Admin asettaa kuukausikohtaisen buukkitavoitteen. Edistymispalkki näkyy kaikille
+        leaderboardin yläpuolella. Kun tiimi ylittää tavoitteen, sivustolla juhlitaan.
+      </p>
+
+      <div class="goal-mockup">
+        <div class="goal-header-row">
+          <div class="goal-title">TIIMITAVOITE · KESÄKUU 2026</div>
+          <div class="goal-nums">142 / 200 buukkia</div>
+        </div>
+        <div class="goal-track"><div class="goal-fill"></div></div>
+        <div class="goal-meta">
+          <div>71% suoritettu</div>
+          <div>·</div>
+          <div><span>7 arkipäivää jäljellä</span></div>
+          <div>·</div>
+          <div>tarvitaan <span>+8 / pv</span></div>
+        </div>
+      </div>
+
+      <div class="info-box">
+        Kun tavoite saavutetaan: <strong>konfetti + bannerilmoitus + live-ticker-huuto</strong>.
+        Uusi tavoite voidaan asettaa välittömästi seuraavalle kuukaudelle ilman sivuston muokkaamista.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Badge-järjestelmä ─────────────────────────── -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">03</span>
+      <h2 class="section-title">Badge-järjestelmä — saavutukset</h2>
+    </div>
+    <div class="section-body">
+      <p style="margin-bottom:16px">
+        Pelaajat saavat automaattisesti avattavia merkkejä suoritusten perusteella.
+        Badget näkyvät pelaajaprofiilissa ja minikoossa leaderboard-rivillä nimen vieressä.
+      </p>
+      <div class="badge-grid">
+        <div class="badge-card">
+          <div class="badge-ico">🔥</div>
+          <div class="badge-info">
+            <div class="badge-name">Tulipallo</div>
+            <div class="badge-desc">5 buukkia tai enemmän yhtenä päivänä</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">👑</div>
+          <div class="badge-info">
+            <div class="badge-name">Kuukauden mestari</div>
+            <div class="badge-desc">Eniten buukkeja kalenterikuukaudessa</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">📈</div>
+          <div class="badge-info">
+            <div class="badge-name">Nousukiito</div>
+            <div class="badge-desc">+50% parannus edelliseen viikkoon verrattuna (min. 5 buukkia)</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">🎯</div>
+          <div class="badge-info">
+            <div class="badge-name">Tarkka-ampuja</div>
+            <div class="badge-desc">Yli 50% buukkiprosentti viikolla (min. 10 vastattua puhelua)</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">💎</div>
+          <div class="badge-info">
+            <div class="badge-name">Legenda</div>
+            <div class="badge-desc">100 buukkia yhteensä kaikki ajat</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">🔄</div>
+          <div class="badge-info">
+            <div class="badge-name">Pitkä putki</div>
+            <div class="badge-desc">Vähintään yksi buukki 5 arkipäivänä peräkkäin</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">🏆</div>
+          <div class="badge-info">
+            <div class="badge-name">Kauden voittaja</div>
+            <div class="badge-desc">Playoff-kilpailun mestari — yksi per kausi</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">🐉</div>
+          <div class="badge-info">
+            <div class="badge-name">Comeback</div>
+            <div class="badge-desc">Nousi alimmalta kolmannekselta top 3:een yhden viikon aikana</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">⭐</div>
+          <div class="badge-info">
+            <div class="badge-name">Viikon sankari</div>
+            <div class="badge-desc">Eniten buukkeja viikolla — jaetaan joka maanantai automaattisesti</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">🚀</div>
+          <div class="badge-info">
+            <div class="badge-name">Raketin lento</div>
+            <div class="badge-desc">Paras henkilökohtainen päivä kaikkina aikoina — uusi ennätys!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Head-to-Head ─────────────────────────── -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">04</span>
+      <h2 class="section-title">Head-to-Head -haaste</h2>
+    </div>
+    <div class="section-body">
+      <p style="margin-bottom:20px">
+        Admin voi asettaa viikottaisen kahden pelaajan välisen haasteen. Tulos näkyy
+        kaikkien sivupaneelissa koko viikon ajan. Luo kilpailuhenkeä ja innostaa seuraamaan
+        sivustoa päivittäin.
+      </p>
+      <div class="h2h-mockup">
+        <div class="h2h-tag">⚔️ VIIKON DUELI</div>
+        <div class="h2h-players">
+          <div>
+            <div class="h2h-nick">Mikko</div>
+            <div class="h2h-pts">14</div>
+          </div>
+          <div class="h2h-vs">VS</div>
+          <div>
+            <div class="h2h-nick">Jone</div>
+            <div class="h2h-pts trail">11</div>
+          </div>
+        </div>
+        <div class="h2h-meta">Loppuu pe 14.6 · Mikko johtaa +3</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Hall of Fame ─────────────────────────── -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">05</span>
+      <h2 class="section-title">Hall of Fame -välilehti</h2>
+    </div>
+    <div class="section-body">
+      <p style="margin-bottom:16px">
+        Pysyvä muistijälki kilpailuhistoriasta. Motivoi pitkäaikaiseen sitoutumiseen kun
+        omat suoritukset jäävät talteen kaikkien nähtäväksi.
+      </p>
+      <div class="badge-grid" style="margin-top:0">
+        <div class="badge-card">
+          <div class="badge-ico">🏆</div>
+          <div class="badge-info">
+            <div class="badge-name">Kausivoittajat</div>
+            <div class="badge-desc">Jokaisen kilpailukauden mestari aikajärjestyksessä</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">📊</div>
+          <div class="badge-info">
+            <div class="badge-name">All-time -tilastot</div>
+            <div class="badge-desc">Kuka on kirjannut eniten buukkeja, pisin putki, paras päivä</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">👑</div>
+          <div class="badge-info">
+            <div class="badge-name">Kuukausi-MVP -historia</div>
+            <div class="badge-desc">Jokaisen kuukauden paras suorittaja tallennettuna</div>
+          </div>
+        </div>
+        <div class="badge-card">
+          <div class="badge-ico">🎖️</div>
+          <div class="badge-info">
+            <div class="badge-name">Ennätykset</div>
+            <div class="badge-desc">Tiimin ja yksilön parhaat suoritukset kaikkina aikoina</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Arkkitehtuuri ─────────────────────────── -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">06</span>
+      <h2 class="section-title">Tekninen muutoskartta</h2>
+    </div>
+    <div class="section-body">
+      <div class="arch-grid">
+        <div class="arch-card now">
+          <div class="arch-label">Nykyinen rakenne</div>
+          <div class="arch-item">Kiinteä COMPETITION-objekti koodissa</div>
+          <div class="arch-item">Päivämäärät kovakoodattu</div>
+          <div class="arch-item">Yksittäinen kilpailu kerrallaan</div>
+          <div class="arch-item">Ei aikarajasuodatusta</div>
+          <div class="arch-item">Ei tavoitteita</div>
+          <div class="arch-item">Ei badgeja</div>
+        </div>
+        <div class="arch-card future">
+          <div class="arch-label">Tuleva rakenne</div>
+          <div class="arch-item">Seasons-taulu Supabasessa (hallittavissa administa)</div>
+          <div class="arch-item">Dynaaminen aikarajasuodatus</div>
+          <div class="arch-item">Toistuvat kaudet + all-time -näkymä</div>
+          <div class="arch-item">6 aikarajavaihtoehtoa + vapaa väli</div>
+          <div class="arch-item">Goals-taulu kuukausitavoitteille</div>
+          <div class="arch-item">Achievements-taulu automaattisille badgeille</div>
+        </div>
+      </div>
+
+      <p style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;letter-spacing:.08em;color:var(--ink-3);text-transform:uppercase;margin:24px 0 10px;">Uudet tietokantataulut</p>
+      <div class="db-grid">
+        <div class="db-card">
+          <div class="db-name">seasons</div>
+          <div class="db-field">id <span>uuid</span></div>
+          <div class="db-field">name <span>text</span> — "Kausi 1"</div>
+          <div class="db-field">start_date <span>date</span></div>
+          <div class="db-field">end_date <span>date</span></div>
+          <div class="db-field">type <span>text</span> — month/quarter/custom</div>
+        </div>
+        <div class="db-card">
+          <div class="db-name">goals</div>
+          <div class="db-field">id <span>uuid</span></div>
+          <div class="db-field">period <span>text</span> — "2026-06"</div>
+          <div class="db-field">target_buukit <span>int</span></div>
+          <div class="db-field">created_by <span>text</span></div>
+          <div class="db-field">created_at <span>timestamptz</span></div>
+        </div>
+        <div class="db-card">
+          <div class="db-name">achievements</div>
+          <div class="db-field">id <span>uuid</span></div>
+          <div class="db-field">player_id <span>text</span></div>
+          <div class="db-field">badge_id <span>text</span> — "fire_day"</div>
+          <div class="db-field">earned_at <span>timestamptz</span></div>
+          <div class="db-field">context <span>jsonb</span> — lisätiedot</div>
+        </div>
+        <div class="db-card">
+          <div class="db-name">daily_stats <span style="color:var(--green);font-size:10px">✓ jo olemassa</span></div>
+          <div class="db-field">id <span>text</span></div>
+          <div class="db-field">player_id <span>text</span></div>
+          <div class="db-field">date_key <span>date</span></div>
+          <div class="db-field">luurit / vastatut / buukit <span>int</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── UI-hahmotelma ─────────────────────────── -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">07</span>
+      <h2 class="section-title">Visuaalinen hahmotelma</h2>
+    </div>
+    <div class="section-body">
+      <p style="margin-bottom:12px;color:var(--ink-3);font-size:13px;">Uusi päänäkymä — sarjataulukkovälilehti aikarajasuodatuksella ja tiimitavoitteella</p>
+      <div class="ui-mockup">
+<span class="dim">┌─[ ⚡ SARJATAULUKKO ]─[ 📋 TIIMIRAPORTTI ]─[ 🏆 HALL OF FAME ]─[ 📊 OMA HISTORIA ]─┐</span>
+<span class="dim">│                                                                                      │</span>
+<span class="dim">│  Ajanjakso: [</span> <span class="hl">Tämä kuukausi ▼</span> <span class="dim">]  Kesäkuu 2026                                      │</span>
+<span class="dim">│                                                                                      │</span>
+<span class="dim">│  ┌─ TIIMITAVOITE ─────────────────────────────────────────────────────────────────┐  │</span>
+<span class="dim">│  │  </span><span class="hl">████████████░░░  142/200 buukkia · 71% · 7 pv jäljellä · tarvitaan +8/pv</span><span class="dim">    │  │</span>
+<span class="dim">│  └────────────────────────────────────────────────────────────────────────────────┘  │</span>
+<span class="dim">│                                                                                      │</span>
+<span class="dim">│  01. </span><span class="hl">MIKKO    🔥💎</span><span class="dim">  │ 38 bk │ 89% vast │ ↑ +5 vs viime vko │  +12 safe            │</span>
+<span class="dim">│  02. </span><span class="hl">JONE     ⭐</span><span class="dim">    │ 31 bk │ 76% vast │ ↔  sama            │   +5 safe            │</span>
+<span class="dim">│  03. TONI        │ 28 bk │ 71% vast │ ↓ −2 vs viime vko │   +2 safe            │</span>
+<span class="dim">│  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─  PLAYOFF-RAJA ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ │</span>
+<span class="dim">│  09. RÄNTILÄ     │ 12 bk │ 55% vast │ ↑ +1 vs viime vko │  −8 playoff          │</span>
+<span class="dim">│                                                                                      │</span>
+<span class="dim">│  </span><span class="hl2">⚔️ VIIKON DUELI:  MIKKO 14  vs  JONE 11  (loppuu pe)</span><span class="dim">                              │</span>
+<span class="dim">└──────────────────────────────────────────────────────────────────────────────────────┘</span></div>
+    </div>
+  </section>
+
+  <!-- ─── Toteutusjärjestys ─────────────────────────── -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">08</span>
+      <h2 class="section-title">Toteutusjärjestys ja työmäärät</h2>
+    </div>
+    <div class="section-body">
+      <table class="priority-table">
+        <thead>
+          <tr>
+            <th style="width:50px">Vaihe</th>
+            <th>Mitä</th>
+            <th style="width:200px">Hyöty</th>
+            <th style="width:90px">Työmäärä</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="phase-num">1</td>
+            <td>
+              <div class="phase-what">Aikarajasuodatus</div>
+              <div class="phase-why">Tänään / viikko / kuukausi / vuosi / oma väli. Kaikki tilastot suodattuvat.</div>
+            </td>
+            <td>Välitön käytännön hyöty päivittäisessä seurannassa</td>
+            <td><span class="phase-effort effort-m">KESKISUURI</span></td>
+          </tr>
+          <tr>
+            <td class="phase-num">2</td>
+            <td>
+              <div class="phase-what">Tiimitavoite per kuukausi</div>
+              <div class="phase-why">Admin asettaa tavoitteen, kaikki näkee edistymispalkin.</div>
+            </td>
+            <td>Motivaatio, yhteisvastuu, näkyvyys johdolle</td>
+            <td><span class="phase-effort effort-s">PIENI</span></td>
+          </tr>
+          <tr>
+            <td class="phase-num">3</td>
+            <td>
+              <div class="phase-what">Badge-järjestelmä</div>
+              <div class="phase-why">10 automaattista saavutusmerkkiä, laskenta joka kirjauksella.</div>
+            </td>
+            <td>Gamification, pitkäaikainen sitoutuminen</td>
+            <td><span class="phase-effort effort-m">KESKISUURI</span></td>
+          </tr>
+          <tr>
+            <td class="phase-num">4</td>
+            <td>
+              <div class="phase-what">Hall of Fame -välilehti</div>
+              <div class="phase-why">Kausivoittajat, all-time tilastot, kuukausi-MVP-historia.</div>
+            </td>
+            <td>Muistijälki, pitkäaikainen motivaatio</td>
+            <td><span class="phase-effort effort-s">PIENI</span></td>
+          </tr>
+          <tr>
+            <td class="phase-num">5</td>
+            <td>
+              <div class="phase-what">Head-to-Head -haaste</div>
+              <div class="phase-why">Admin asettaa viikottaisen pelaajaparin, tulos näkyy sivupaneelissa.</div>
+            </td>
+            <td>Kilpailuhenki, päivittäinen seuranta</td>
+            <td><span class="phase-effort effort-s">PIENI</span></td>
+          </tr>
+          <tr>
+            <td class="phase-num">6</td>
+            <td>
+              <div class="phase-what">Henkilökohtainen kehityskaavio</div>
+              <div class="phase-why">Sparkline-kaavio viikon/kuukauden suorituksesta omassa kortissa.</div>
+            </td>
+            <td>Oma seuranta, itseohjautuva kehitys</td>
+            <td><span class="phase-effort effort-m">KESKISUURI</span></td>
+          </tr>
+          <tr>
+            <td class="phase-num">7</td>
+            <td>
+              <div class="phase-what">Seasons-hallinta administa</div>
+              <div class="phase-why">Kilpailukaudet luodaan ja hallitaan suoraan admin-paneelista ilman koodimuutoksia.</div>
+            </td>
+            <td>Ylläpidettävyys, itsenäinen operointi</td>
+            <td><span class="phase-effort effort-l">LAAJA</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="info-box" style="margin-top:20px">
+        <strong>Suositus:</strong> Vaiheet 1–2 kannattaa toteuttaa heti Kausi 1:n jälkeen ennen seuraavan kauden alkua.
+        Vaiheet 3–5 lisätään seuraavan kauden aikana. Vaihe 7 vasta kun useampi kausi on pyörinyt.
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ─── Badge System UI Design ─────────────────────────── -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">✦ DESIGN</span>
+      <h2 class="section-title">Badge System — UI Design</h2>
+    </div>
+    <div class="section-body">
+
+      <!-- Intro -->
+      <p style="margin-bottom:28px;max-width:700px">
+        Viisi tasoa Bronze → Silver → Gold → Platinum → Legend. Jokainen taso avaa uusia badgeja
+        ja nostaa pelaajan statusta leaderboardilla. Edistyminen lasketaan automaattisesti
+        <code>daily_stats</code>-taulusta — ei manuaalista hallintaa.
+      </p>
+
+      <!-- ── Tier overview ── -->
+      <p class="bs-label">TASOJÄRJESTELMÄ — 5 TASOA</p>
+      <div class="tier-row">
+
+        <div class="tier-card tier-bronze">
+          <div class="tier-ico">🥉</div>
+          <div class="tier-name">BRONZE</div>
+          <div class="tier-req">0 – 24 buukkia<br>yhteensä</div>
+          <div class="tier-perks">Pääsy kilpailuun<br>1 badge-paikka näkyvillä</div>
+        </div>
+
+        <div class="tier-sep">→</div>
+
+        <div class="tier-card tier-silver">
+          <div class="tier-ico">🥈</div>
+          <div class="tier-name">SILVER</div>
+          <div class="tier-req">25 – 74 buukkia<br>yhteensä</div>
+          <div class="tier-perks">Silver-kehys avatarissa<br>3 badge-paikkaa näkyvillä</div>
+        </div>
+
+        <div class="tier-sep">→</div>
+
+        <div class="tier-card tier-gold">
+          <div class="tier-ico">🥇</div>
+          <div class="tier-name">GOLD</div>
+          <div class="tier-req">75 – 149 buukkia<br>yhteensä</div>
+          <div class="tier-perks">Gold-kehys + nimike<br>5 badge-paikkaa + animaatio</div>
+        </div>
+
+        <div class="tier-sep">→</div>
+
+        <div class="tier-card tier-plat">
+          <div class="tier-ico">💠</div>
+          <div class="tier-name">PLATINUM</div>
+          <div class="tier-req">150 – 299 buukkia<br>yhteensä</div>
+          <div class="tier-perks">Platinum-hehku + "Pro"-tag<br>Kaikki badget näkyvillä</div>
+        </div>
+
+        <div class="tier-sep">→</div>
+
+        <div class="tier-card tier-legend">
+          <div class="tier-ico">💎</div>
+          <div class="tier-name">LEGEND</div>
+          <div class="tier-req">300+ buukkia<br>yhteensä</div>
+          <div class="tier-perks">Hall of Fame -merkintä<br>Pysyvä tähti profiilissa</div>
+        </div>
+
+      </div>
+
+      <!-- ── Tier progress bar ── -->
+      <p class="bs-label" style="margin-top:36px">ESIMERKKI — MIKKO ETENEMÄSSÄ GOLD → PLATINUM</p>
+      <div class="tier-progress-wrap">
+        <div class="tp-header">
+          <div class="tp-left">
+            <span class="tp-tier-badge tier-gold-inline">🥇 GOLD</span>
+            <span class="tp-pts">112 / 150 buukkia</span>
+          </div>
+          <div class="tp-right">
+            <span class="tp-next">Seuraava taso: </span>
+            <span class="tp-tier-badge tier-plat-inline">💠 PLATINUM</span>
+            <span class="tp-remaining">— 38 buukkia jäljellä</span>
+          </div>
+        </div>
+        <div class="tp-track">
+          <div class="tp-fill" style="width:74.7%">
+            <span class="tp-pct">74%</span>
+          </div>
+          <div class="tp-milestones">
+            <div class="tp-milestone" style="left:0%"><span>Bronze<br>0</span></div>
+            <div class="tp-milestone" style="left:16.7%"><span>Silver<br>25</span></div>
+            <div class="tp-milestone achieved" style="left:50%"><span>Gold<br>75</span></div>
+            <div class="tp-milestone next" style="left:100%"><span>Platinum<br>150</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Badge catalog ── -->
+      <p class="bs-label" style="margin-top:44px">BADGE-KATALOGI — KAIKKI 16 MERKKIÄ</p>
+
+      <!-- Bronze badges -->
+      <div class="bc-tier-label bronze-label">🥉 BRONZE — Perustaso</div>
+      <div class="bc-grid">
+
+        <div class="bc-card earned">
+          <div class="bc-top">
+            <span class="bc-ico">🎯</span>
+            <span class="bc-earned-tag">✓ AVATTU</span>
+          </div>
+          <div class="bc-name">Ensimmäinen buukki</div>
+          <div class="bc-cond">Kirjaa 1 buukki</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill" style="width:100%"></div></div>
+            <span class="bc-prog-txt">1 / 1</span>
+          </div>
+        </div>
+
+        <div class="bc-card earned">
+          <div class="bc-top">
+            <span class="bc-ico">📞</span>
+            <span class="bc-earned-tag">✓ AVATTU</span>
+          </div>
+          <div class="bc-name">Luurin nosto</div>
+          <div class="bc-cond">Kirjaa 10 luurin nostoa</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill" style="width:100%"></div></div>
+            <span class="bc-prog-txt">10 / 10</span>
+          </div>
+        </div>
+
+        <div class="bc-card earned">
+          <div class="bc-top">
+            <span class="bc-ico">🔄</span>
+            <span class="bc-earned-tag">✓ AVATTU</span>
+          </div>
+          <div class="bc-name">Ensimmäinen putki</div>
+          <div class="bc-cond">Buukki 3 arkipäivänä peräkkäin</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill" style="width:100%"></div></div>
+            <span class="bc-prog-txt">3 / 3 pv</span>
+          </div>
+        </div>
+
+        <div class="bc-card in-progress">
+          <div class="bc-top">
+            <span class="bc-ico">📊</span>
+            <span class="bc-progress-tag">60% — KESKEN</span>
+          </div>
+          <div class="bc-name">Kymmenen klubi</div>
+          <div class="bc-cond">Kirjaa yhteensä 10 buukkia</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill" style="width:60%"></div></div>
+            <span class="bc-prog-txt">6 / 10</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Silver badges -->
+      <div class="bc-tier-label silver-label" style="margin-top:20px">🥈 SILVER — Kasvava tekijä</div>
+      <div class="bc-grid">
+
+        <div class="bc-card earned">
+          <div class="bc-top">
+            <span class="bc-ico">🔥</span>
+            <span class="bc-earned-tag">✓ AVATTU</span>
+          </div>
+          <div class="bc-name">Tulipallo</div>
+          <div class="bc-cond">5+ buukkia yhtenä päivänä</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill" style="width:100%"></div></div>
+            <span class="bc-prog-txt">5 / 5</span>
+          </div>
+        </div>
+
+        <div class="bc-card in-progress">
+          <div class="bc-top">
+            <span class="bc-ico">🎯</span>
+            <span class="bc-progress-tag">80% — KESKEN</span>
+          </div>
+          <div class="bc-name">Tarkka-ampuja</div>
+          <div class="bc-cond">Yli 50% buukkiprosentti viikolla (min. 10 vastattua)</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill" style="width:80%"></div></div>
+            <span class="bc-prog-txt">8 / 10 vastattu</span>
+          </div>
+        </div>
+
+        <div class="bc-card in-progress">
+          <div class="bc-top">
+            <span class="bc-ico">⭐</span>
+            <span class="bc-progress-tag">VIIKOLLA MAHDOLLINEN</span>
+          </div>
+          <div class="bc-name">Viikon sankari</div>
+          <div class="bc-cond">Eniten buukkeja viikon aikana</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill accent-fill" style="width:92%"></div></div>
+            <span class="bc-prog-txt">Johdat nyt: 14 bk (2. sijalla: 12 bk)</span>
+          </div>
+        </div>
+
+        <div class="bc-card locked">
+          <div class="bc-top">
+            <span class="bc-ico locked-ico">🔒</span>
+            <span class="bc-locked-tag">LUKITTU</span>
+          </div>
+          <div class="bc-name">Pitkä putki</div>
+          <div class="bc-cond">5 arkipäivää peräkkäin vähintään 1 buukki</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill locked-fill" style="width:40%"></div></div>
+            <span class="bc-prog-txt">2 / 5 pv putkessa</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Gold badges -->
+      <div class="bc-tier-label gold-label" style="margin-top:20px">🥇 GOLD — Huippusuorittaja</div>
+      <div class="bc-grid">
+
+        <div class="bc-card locked">
+          <div class="bc-top">
+            <span class="bc-ico locked-ico">🔒</span>
+            <span class="bc-locked-tag">LUKITTU</span>
+          </div>
+          <div class="bc-name">Kuukauden mestari</div>
+          <div class="bc-cond">Eniten buukkeja kalenterikuukaudessa</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill locked-fill" style="width:55%"></div></div>
+            <span class="bc-prog-txt">Tällä hetkellä 2. sija kuukaudella</span>
+          </div>
+        </div>
+
+        <div class="bc-card locked">
+          <div class="bc-top">
+            <span class="bc-ico locked-ico">🔒</span>
+            <span class="bc-locked-tag">LUKITTU</span>
+          </div>
+          <div class="bc-name">Nousukiito</div>
+          <div class="bc-cond">+50 % parannus edelliseen viikkoon (min. 5 buukkia)</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill locked-fill" style="width:30%"></div></div>
+            <span class="bc-prog-txt">+18 % kasvu tällä hetkellä</span>
+          </div>
+        </div>
+
+        <div class="bc-card locked">
+          <div class="bc-top">
+            <span class="bc-ico locked-ico">🔒</span>
+            <span class="bc-locked-tag">LUKITTU</span>
+          </div>
+          <div class="bc-name">Superpäivä</div>
+          <div class="bc-cond">8+ buukkia yhtenä päivänä</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill locked-fill" style="width:62%"></div></div>
+            <span class="bc-prog-txt">Paras päivä tähän mennessä: 5 bk</span>
+          </div>
+        </div>
+
+        <div class="bc-card locked">
+          <div class="bc-top">
+            <span class="bc-ico locked-ico">🔒</span>
+            <span class="bc-locked-tag">LUKITTU</span>
+          </div>
+          <div class="bc-name">Comeback</div>
+          <div class="bc-cond">Nousi alimmalta kolmannekselta top 3:een yhden viikon aikana</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill locked-fill" style="width:0%"></div></div>
+            <span class="bc-prog-txt">Ei vielä lauennut</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Platinum + Legend -->
+      <div class="bc-tier-label plat-label" style="margin-top:20px">💠 PLATINUM &amp; 💎 LEGEND — Eliitti</div>
+      <div class="bc-grid">
+
+        <div class="bc-card locked tier-locked-plat">
+          <div class="bc-top">
+            <span class="bc-ico locked-ico">🔒</span>
+            <span class="bc-locked-tag plat-tag">PLATINUM VAADITAAN</span>
+          </div>
+          <div class="bc-name">Legenda</div>
+          <div class="bc-cond">100 buukkia yhteensä</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill locked-fill" style="width:38%"></div></div>
+            <span class="bc-prog-txt">38 / 100 buukkia</span>
+          </div>
+        </div>
+
+        <div class="bc-card locked tier-locked-plat">
+          <div class="bc-top">
+            <span class="bc-ico locked-ico">🔒</span>
+            <span class="bc-locked-tag plat-tag">PLATINUM VAADITAAN</span>
+          </div>
+          <div class="bc-name">Kauden voittaja</div>
+          <div class="bc-cond">Playoff-kilpailun mestari</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill locked-fill" style="width:0%"></div></div>
+            <span class="bc-prog-txt">Playoff käynnissä</span>
+          </div>
+        </div>
+
+        <div class="bc-card locked tier-locked-legend">
+          <div class="bc-top">
+            <span class="bc-ico locked-ico">🔒</span>
+            <span class="bc-locked-tag legend-tag">LEGEND VAADITAAN</span>
+          </div>
+          <div class="bc-name">Hall of Fame</div>
+          <div class="bc-cond">Saavuta Legend-taso (300 buukkia)</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill locked-fill" style="width:13%"></div></div>
+            <span class="bc-prog-txt">38 / 300 buukkia</span>
+          </div>
+        </div>
+
+        <div class="bc-card locked tier-locked-legend">
+          <div class="bc-top">
+            <span class="bc-ico locked-ico">🔒</span>
+            <span class="bc-locked-tag legend-tag">LEGEND VAADITAAN</span>
+          </div>
+          <div class="bc-name">Ikuinen tähti</div>
+          <div class="bc-cond">Voita 3 eri kilpailukautta</div>
+          <div class="bc-prog-wrap">
+            <div class="bc-prog-bar"><div class="bc-prog-fill locked-fill" style="width:0%"></div></div>
+            <span class="bc-prog-txt">0 / 3 kauden voittoa</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── Player profile view ── -->
+      <p class="bs-label" style="margin-top:48px">PELAAJAPROFIILI — BADGE-NÄKYMÄ</p>
+      <div class="profile-view">
+
+        <!-- Left: identity -->
+        <div class="pv-identity">
+          <div class="pv-avatar-wrap">
+            <div class="pv-avatar gold-ring">MI</div>
+            <div class="pv-tier-pip">🥇</div>
+          </div>
+          <div class="pv-name">MIKKO</div>
+          <div class="pv-city">TAMPERE</div>
+          <div class="pv-title gold-title">GOLD · 112 pts</div>
+
+          <!-- Progress to next tier -->
+          <div class="pv-tier-prog">
+            <div class="pv-tp-label">
+              <span>Kohti Platinum</span>
+              <span class="pv-tp-pct">74 %</span>
+            </div>
+            <div class="pv-tp-track">
+              <div class="pv-tp-fill" style="width:74.7%"></div>
+            </div>
+            <div class="pv-tp-sub">38 buukkia puuttuu</div>
+          </div>
+
+          <!-- Key stats -->
+          <div class="pv-stats">
+            <div class="pv-stat">
+              <div class="pv-stat-v">112</div>
+              <div class="pv-stat-l">BUUKIT YHT.</div>
+            </div>
+            <div class="pv-stat">
+              <div class="pv-stat-v">7</div>
+              <div class="pv-stat-l">PUTKI (PV)</div>
+            </div>
+            <div class="pv-stat">
+              <div class="pv-stat-v">5</div>
+              <div class="pv-stat-l">PARAS PÄIVÄ</div>
+            </div>
+            <div class="pv-stat">
+              <div class="pv-stat-v">68%</div>
+              <div class="pv-stat-l">BUUKKI %</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: badges -->
+        <div class="pv-badges">
+          <div class="pv-badges-title">SAAVUTUKSET <span class="pv-count">5 avattu · 11 lukittu</span></div>
+
+          <div class="pv-badge-section-label">AVATUT BADGET</div>
+          <div class="pv-badge-shelf">
+            <div class="pv-badge earned-badge" title="Ensimmäinen buukki">
+              <div class="pvb-ico">🎯</div>
+              <div class="pvb-name">1. Buukki</div>
+              <div class="pvb-when">2.6.2026</div>
+            </div>
+            <div class="pv-badge earned-badge" title="Luurin nosto">
+              <div class="pvb-ico">📞</div>
+              <div class="pvb-name">Luurin nosto</div>
+              <div class="pvb-when">3.6.2026</div>
+            </div>
+            <div class="pv-badge earned-badge" title="Ensimmäinen putki">
+              <div class="pvb-ico">🔄</div>
+              <div class="pvb-name">1. Putki</div>
+              <div class="pvb-when">5.6.2026</div>
+            </div>
+            <div class="pv-badge earned-badge" title="Tulipallo">
+              <div class="pvb-ico">🔥</div>
+              <div class="pvb-name">Tulipallo</div>
+              <div class="pvb-when">8.6.2026</div>
+            </div>
+            <div class="pv-badge earned-badge featured-badge" title="Viikon sankari">
+              <div class="pvb-ico">⭐</div>
+              <div class="pvb-name">Vk. Sankari</div>
+              <div class="pvb-when">tällä viikolla</div>
+            </div>
+          </div>
+
+          <div class="pv-badge-section-label" style="margin-top:20px">LÄHELLÄ AVAUTUMISTA</div>
+          <div class="pv-progress-list">
+
+            <div class="pv-prog-item">
+              <span class="pv-prog-ico">🎯</span>
+              <div class="pv-prog-mid">
+                <div class="pv-prog-name">Tarkka-ampuja</div>
+                <div class="pv-prog-bar-wrap">
+                  <div class="pv-prog-bar"><div class="pv-prog-fill" style="width:80%"></div></div>
+                </div>
+              </div>
+              <span class="pv-prog-frac">8/10</span>
+            </div>
+
+            <div class="pv-prog-item">
+              <span class="pv-prog-ico">🔄</span>
+              <div class="pv-prog-mid">
+                <div class="pv-prog-name">Pitkä putki (5 pv)</div>
+                <div class="pv-prog-bar-wrap">
+                  <div class="pv-prog-bar"><div class="pv-prog-fill" style="width:40%"></div></div>
+                </div>
+              </div>
+              <span class="pv-prog-frac">2/5</span>
+            </div>
+
+            <div class="pv-prog-item">
+              <span class="pv-prog-ico">🔥</span>
+              <div class="pv-prog-mid">
+                <div class="pv-prog-name">Superpäivä (8 bk/pv)</div>
+                <div class="pv-prog-bar-wrap">
+                  <div class="pv-prog-bar"><div class="pv-prog-fill" style="width:62%"></div></div>
+                </div>
+              </div>
+              <span class="pv-prog-frac">5/8</span>
+            </div>
+
+          </div>
+
+          <div class="pv-badge-section-label" style="margin-top:20px">LUKITUT — 8 jäljellä</div>
+          <div class="pv-badge-shelf locked-shelf">
+            <div class="pv-badge locked-badge" title="Kuukauden mestari — lukittu">
+              <div class="pvb-ico locked-ico">🔒</div>
+              <div class="pvb-name">Kk. Mestari</div>
+            </div>
+            <div class="pv-badge locked-badge" title="Nousukiito — lukittu">
+              <div class="pvb-ico locked-ico">🔒</div>
+              <div class="pvb-name">Nousukiito</div>
+            </div>
+            <div class="pv-badge locked-badge" title="Comeback — lukittu">
+              <div class="pvb-ico locked-ico">🔒</div>
+              <div class="pvb-name">Comeback</div>
+            </div>
+            <div class="pv-badge locked-badge" title="Legenda — lukittu">
+              <div class="pvb-ico locked-ico">🔒</div>
+              <div class="pvb-name">Legenda</div>
+            </div>
+            <div class="pv-badge locked-badge tier-locked-plat" title="Kauden voittaja — Platinum vaaditaan">
+              <div class="pvb-ico locked-ico">🔒</div>
+              <div class="pvb-name">Kaud. Voittaja</div>
+            </div>
+            <div class="pv-badge locked-badge tier-locked-legend" title="Hall of Fame — Legend vaaditaan">
+              <div class="pvb-ico locked-ico">🔒</div>
+              <div class="pvb-name">Hall of Fame</div>
+            </div>
+            <div class="pv-badge locked-badge tier-locked-legend" title="Ikuinen tähti — Legend vaaditaan">
+              <div class="pvb-ico locked-ico">🔒</div>
+              <div class="pvb-name">Ikuinen tähti</div>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /profile-view -->
+
+    </div>
+  </section>
+
+</div>
+
+<!-- ─── Footer ─────────────────────────── -->
+<footer class="page-footer">
+  <strong>BUUKKAUSKISA · SALES DASHBOARD 2.0</strong> &nbsp;·&nbsp;
+  SUUNNITELMA LAADITTU 8.6.2026 &nbsp;·&nbsp;
+  ALUSTA: REACT + SUPABASE + VERCEL
+</footer>
+
+</body>
+</html>
