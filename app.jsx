@@ -1516,7 +1516,7 @@ function App() {
       const initial = await DB.init();
       const rawPlayers = initial.players || {};
       const dailyRows  = initial.daily   || [];
-      const po         = initial.playoff || EMPTY_PLAYOFF;
+      const po         = migratePlayoff(initial.playoff || EMPTY_PLAYOFF);
       const pout       = initial.playout || EMPTY_PLAYOUT;
 
       // daily_stats is the source of truth — always recalc totals from it
@@ -1541,7 +1541,7 @@ function App() {
         setPlayersMap(recalced);
       });
       unsubPO = DB.subscribePlayoff((fresh) => {
-        const next = fresh || EMPTY_PLAYOFF;
+        const next = migratePlayoff(fresh || EMPTY_PLAYOFF);
         playoffRef.current = next;
         setPlayoff(next);
       });

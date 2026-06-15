@@ -84,10 +84,13 @@ function recomputeAdvancement(playoff) {
   // Etenee voittajat seuraavaan kierrokseen
   const m = { ...playoff.matches };
   const ensure = (id, homeKey, awayKey) => {
-    const cur = m[id];
+    // Jos ottelu puuttuu (vanha tallennettu data), luo se oletuksesta
+    const cur = m[id] || { ...EMPTY_PLAYOFF.matches[id] };
     if (cur.homeKey !== homeKey || cur.awayKey !== awayKey) {
       // jos joku slotti tyhjeni (peruutus), nollaa voittaja
       m[id] = { ...cur, homeKey, awayKey, winnerKey: null };
+    } else {
+      m[id] = cur;
     }
   };
   ensure('SF1', m.QF1.winnerKey, m.QF2.winnerKey);
@@ -104,6 +107,22 @@ function recomputeAdvancement(playoff) {
   const finishedAt = championKey && !playoff.finishedAt ? Date.now() : (championKey ? playoff.finishedAt : null);
 
   return { ...playoff, matches: m, championKey, finishedAt };
+}
+
+// Täydentää vanhaan tallennettuun playoff-dataan myöhemmin lisätyt ottelut
+// (esim. pronssiottelu B) ja laskee etenemisen uudelleen.
+function migratePlayoff(playoff) {
+  if (!playoff) return playoff;
+  const matches = { ...playoff.matches };
+  let changed = false;
+  for (const id of MATCH_ORDER) {
+    if (!matches[id]) {
+      matches[id] = { ...EMPTY_PLAYOFF.matches[id] };
+      changed = true;
+    }
+  }
+  if (!changed) return playoff;
+  return recomputeAdvancement({ ...playoff, matches });
 }
 
 function setMatchWinner(playoff, matchId, side) {
@@ -300,7 +319,7 @@ Object.assign(window, {
   currentWeekdayIndex, currentWeekDays, currentDayNumber,
   competitionPhase,
   EMPTY_PLAYOFF, MATCH_ORDER,
-  setMatchWinner, clearMatchWinner, startPlayoffs, resetPlayoffs, recomputeAdvancement,
+  setMatchWinner, clearMatchWinner, startPlayoffs, resetPlayoffs, recomputeAdvancement, migratePlayoff,
   WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats,
   EMPTY_PLAYOUT, startPlayout, setSakko, clearSakko, resetPlayout,
 });
