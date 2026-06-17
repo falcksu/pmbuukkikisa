@@ -34,8 +34,10 @@ Peli käyttää **fiktiivisiä liigoja ja pelaajia** lisenssiriskien välttämis
 - [ ] **6 fiktiivistä liigaa** — 3 aluetta (Pohjoinen, Keski, Etelä) × 2 sarjatasoa (Premier Division + First Division per alue)
 - [ ] 20 joukkuetta per liiga (120 joukkuetta), ~25 pelaajaa per joukkue (~3 000 pelaajaa generoituna)
 - [ ] **Promootio/relegaatio:** kauden lopussa ylimmän liigan viimeiset 2 ja First Divisionin top-2 vaihtavat paikkoja automaattisesti
-- [ ] Kausirakenne: runkosarja (60 peliä) → pudotuspelit Premier Divisionissa (top-8, best-of-5); First Divisionissa vain runkosarja + promootiohaaste
-- [ ] **Playoff-siemennys:** pisteet runkosarjasta, tasapisteet ratkotaan järjestyksessä: maaliero → voitot → keskinäiset ottelut. Siemenet 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5. Korkeampi siemen pelaa kotona ottelut 1, 2, 5.
+- [ ] Kausirakenne: runkosarja (60 peliä) → pudotuspelit Premier Divisionissa (top-8, best-of-5); First Divisionissa vain runkosarja (ei omia pudotuspelejä)
+- [ ] **Playoff-siemennys:** pisteet runkosarjasta, tasapisteet ratkotaan: maaliero → voitot → keskinäiset ottelut. Siemenet 1v8, 2v7, 3v6, 4v5.
+- [ ] **Playoff-kotiedun formaatti (2-2-1):** Korkeampi siemen pelaa kotona pelit 1, 2 ja 5 (jos tarvitaan); vieraat pelaavat kotona pelit 3 ja 4. Tämä on tarkoituksellinen NHL-tyyppinen 2-2-1-formaatti, ei virhe.
+- [ ] **First Division kauden päätös:** runkosarja → sijoitus → top-2 nousee automaattisesti Premier Divisioniin. Muuta post-season-sisältöä ei ole MVP:ssä.
 - [ ] 2D-ottelusimulaatio graafisella näkymällä (Godot 2D)
 - [ ] Siirtoikkuna (kaksi per kausi) ja sopimusneuvottelut
 - [ ] Perustalous: budjetti, palkat, lipputulot, sponsorit
@@ -155,12 +157,22 @@ FUNCTION simulate_game(home_team, away_team):
 
     IF event_type == "shot":
       shooter = select_shooter(active_line)
-      shot_quality = shooter.shooting * (1 - fatigue_modifier) * zone_modifier
-      save_prob = goalie.save_skill * (1 - goalie_fatigue) * 0.92  # perustorjunta%
-      IF random() > save_prob + shot_quality_factor:
+      # shot_quality: normalisoitu arvo välillä 0.0–0.15
+      # shooting 1→ 0.0, shooting 20 → 0.15; fatigue pienentää lineaarisesti
+      shot_quality = (shooter.shooting / 20.0) * 0.15 * (1 - fatigue_modifier) * zone_modifier
+
+      # goalie save_skill 1→ 0.80, save_skill 20→ 0.95; goalie_fatigue pienentää
+      save_prob = 0.80 + (goalie.save_skill / 20.0) * 0.15 * (1 - goalie_fatigue * 0.1)
+
+      # Maali syntyy kun satunnaisluku ylittää (save_prob - shot_quality)
+      # Eli hyvä laukaus laskee kynnystä, hyvä MV nostaa sitä
+      threshold = save_prob - shot_quality  # välillä ~0.65–0.95
+      IF random() > threshold:
         GOAL → update_score, create_goal_event
       ELSE:
         SAVE → create_save_event
+      # Kalibrointi: average shooter (10) vs. average goalie (10) → ~maalit ~3.0/peli
+      # Tulee tarkistaa Monte Carlo -ajoissa Sprint 5:ssä
 
     IF event_type == "penalty":
       team = weighted_random(home_penalty_rate, away_penalty_rate)
@@ -236,10 +248,17 @@ FATIGUE_OTTELUSSA:
   81–100: attribuutit × 0.70, loukkaantumisriski ×2
 ```
 
+**Fatigue-nollaus:**
+- Ottelun jälkeen: fatigue +8 (kaikki pelaajat, myös penkkivaraukset +2)
+- Lepopäivä harjoitusohjelmassa: fatigue −20
+- Viikon "lepo"-fokus: fatigue −35 koko viikolle
+- Kauden päättyessä: fatigue nollataan kokonaan kaikille pelaajille ennen seuraavaa kautta
+- Loukkaantunut pelaaja: fatigue pysyy loukkaantumisen aikana; nollautuu kun palaa peliin
+
 **Loukkaantumiset (MVP-taso):**
-- Todennäköisyys per ottelu: base 2% + taklaaminen-attribuutin kertoin + fatigue-kertoin
-- Kesto: random(1..8) viikkoa, vakavuuden mukaan
-- Ei erillisiä loukkaantumistyyppejä MVP:ssä (P1-ominaisuus)
+- Todennäköisyys per ottelu: `base_risk = 0.02 + (checking / 200) + (fatigue / 1000)`
+- Kesto: `random(1, 8)` viikkoa, ei erillisiä tyyppejä MVP:ssä (P1-ominaisuus)
+- Loukkaantunut pelaaja poistetaan rosterin käytettävissä-listalta kuntouttumisajaksi
 
 ### 4.4 Siirtoikkuna
 
@@ -279,12 +298,16 @@ KAUSIBUDJETTI:
   kassavaranto += tulos  # kumulatiivinen saldo
 
 GAME OVER -EHTO (irtisanominen):
+  # Tarkistushetki: kauden päätyttyä, ENNEN uuden kauden siirtoikkunaa
+  # Pelaaja voi estää game overin myymällä pelaajia siirtoikkunassa (tulot realisoituvat heti)
+  # Lainoja tai hallituksen bailoutia EI ole MVP:ssä
   IF kassavaranto < 0 kauden lopussa:
-    varoitus (1. kerta: "Hallitus antaa lisäaikaa")
+    varoitus (1. kerta: "Hallitus antaa lisäaikaa — myy tai säästä")
+    # Pelaajalle näytetään kassavaje ja ehdotettu säästötoimenpide
   IF kassavaranto < 0 KAHTENA peräkkäisenä kauden lopussa:
     game over — "Hallitus irtisanoo sinut"
-  # Kassavaranto = rahavaranto kauden lopussa, ei tilikauden tulos.
-  # Negatiivinen kassavaranto = joukkue ei pysty maksamaan palkkoja.
+  # Kassavaranto = kumulatiivinen rahavaranto kauden päättyessä.
+  # Negatiivinen = joukkue maksukyvytön.
 
 FANITUKI (0–100):
   kasvaa: voitot, mestaruus, nuorten nostaminen
