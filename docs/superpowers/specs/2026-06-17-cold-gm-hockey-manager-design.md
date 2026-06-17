@@ -31,17 +31,43 @@ Peli käyttää **fiktiivisiä liigoja ja pelaajia** lisenssiriskien välttämis
 
 ### P0 — Pakollinen EA-julkaisuun
 
-- [ ] 3 fiktiivistä liigaa (sarjajärjestelmä: ylin + alainen liiga per alue — Pohjoinen, Keski, Etelä)
-- [ ] 20 joukkuetta per liiga, ~25 pelaajaa per joukkue (~1 500 pelaajaa generoituna)
-- [ ] Koko kausirakenne: runkosarja (60 peliä) → pudotuspelit (8 joukkuetta, best-of-5)
+- [ ] **6 fiktiivistä liigaa** — 3 aluetta (Pohjoinen, Keski, Etelä) × 2 sarjatasoa (Premier Division + First Division per alue)
+- [ ] 20 joukkuetta per liiga (120 joukkuetta), ~25 pelaajaa per joukkue (~3 000 pelaajaa generoituna)
+- [ ] **Promootio/relegaatio:** kauden lopussa ylimmän liigan viimeiset 2 ja First Divisionin top-2 vaihtavat paikkoja automaattisesti
+- [ ] Kausirakenne: runkosarja (60 peliä) → pudotuspelit Premier Divisionissa (top-8, best-of-5); First Divisionissa vain runkosarja + promootiohaaste
+- [ ] **Playoff-siemennys:** pisteet runkosarjasta, tasapisteet ratkotaan järjestyksessä: maaliero → voitot → keskinäiset ottelut. Siemenet 1 vs 8, 2 vs 7, 3 vs 6, 4 vs 5. Korkeampi siemen pelaa kotona ottelut 1, 2, 5.
 - [ ] 2D-ottelusimulaatio graafisella näkymällä (Godot 2D)
 - [ ] Siirtoikkuna (kaksi per kausi) ja sopimusneuvottelut
 - [ ] Perustalous: budjetti, palkat, lipputulot, sponsorit
 - [ ] Harjoitusjärjestelmä (viikko-ohjelma, fokusvalinta)
 - [ ] JSON/CSV-pohjainen modausrajapinta
 - [ ] Steam Workshop -tuki
-- [ ] 20 saavutusta
+- [ ] **20 saavutusta** (lista alla)
 - [ ] Pilvitallennus (Steam Cloud)
+
+**Saavutuslista (EA-julkaisuun):**
+| # | Nimi | Ehto |
+|---|---|---|
+| 1 | First Win | Voita ensimmäinen ottelu |
+| 2 | Unbeaten Run | 10 peliä ilman häviötä |
+| 3 | Champion | Voita Premier Division |
+| 4 | Promoted | Nouse First Divisionista Premier Divisioniin |
+| 5 | Survival | Vältä relegaatio viimeisellä sijalla joukkue |
+| 6 | Budget Boss | Päätä kausi positiivisella kassavarannolla 3 kertaa peräkkäin |
+| 7 | Bargain Hunter | Osta pelaaja alle 50 % arvioidusta hinnasta |
+| 8 | Academy Graduate | Nosta nuorisoakatemian pelaaja kokoonpanoon (P1, mutta saavutus kirjataan myöhemmin) |
+| 9 | Shutout | Voita ottelu 0 päästettyä maalia |
+| 10 | Hat Trick Hero | Yksi pelaaja tekee 3 maalia yhdessä ottelussa |
+| 11 | Comeback Kings | Voita ottelu oltuasi 3 maalilla tappiolla |
+| 12 | Perfect Season | Voita kaikki kotiottelut runkosarjassa |
+| 13 | Iron Man | Sama pelaaja pelaa kaikki runkosarjan ottelut |
+| 14 | Power Play King | PP-teho yli 30 % koko kaudella |
+| 15 | Penalty Box | Joukkueella yli 100 rangaistusminuuttia kaudella |
+| 16 | Underdog | Voita mestaruus alimman alkubudjetin joukkueella |
+| 17 | Treble | Voita sekä alue- että kansallinen mestaruus samana kaudena (tuleva ominaisuus, placeholder) |
+| 18 | Decade of Dominance | Pelaa 10 kautta saman joukkueen kanssa |
+| 19 | Workshop Pioneer | Pelaa mod-paketilla (Workshop-modi aktivoitu) |
+| 20 | Cold GM | Saavuta kaikki muut saavutukset |
 
 ### P1 — EA:n aikana (kk 8–14)
 
@@ -215,7 +241,25 @@ FATIGUE_OTTELUSSA:
 - Kesto: random(1..8) viikkoa, vakavuuden mukaan
 - Ei erillisiä loukkaantumistyyppejä MVP:ssä (P1-ominaisuus)
 
-### 4.4 Talous
+### 4.4 Siirtoikkuna
+
+**Kaksi ikkunaa per kausi:**
+- **Esikausi-ikkuna:** ennen runkosarjan alkua, kesto 4 peliviikkoa. Vapaat agentit + joukkueiden väliset kaupat.
+- **Puolikausi-ikkuna:** runkosarjan 30. pelin jälkeen, kesto 2 peliviikkoa. Rajatumpi aktiviteetti.
+
+**Siirtomekaniikat (MVP):**
+- Pelaaja saa siirtohinnan automaattisesti (= palkka × ikäkerroin × attribuuttikerroin)
+- Pelaaja voidaan ostaa suoraan tai tehdä tarjous (AI voi torjua)
+- AI-joukkueet tekevät omia siirtojaan (yksinkertaistettu: satunnainen ostaja arvotaan, jos budjetti riittää)
+- Laina-sopimukset: pelaaja pelaa toisessa joukkueessa 1 kauden, palaa sen jälkeen
+- Palkkakatto: **valinnainen asetus** (päällä/pois asetuksissa), ei pakollinen MVP:ssä
+
+**Sopimusneuvottelut:**
+- Sopimuksen pituus: 1–4 kautta
+- Palkka: pelaaja esittää vaatimuksen (= attribuuttitaso × liigakertoin), pelaaja voi neuvotella ±20%
+- Jos sopimusta ei synny, pelaaja siirtyy vapaaksi agentiksi kauden päättyessä
+
+### 4.5 Talous
 
 ```
 KAUSIBUDJETTI:
@@ -232,8 +276,15 @@ KAUSIBUDJETTI:
     hallikulut     = kiinteä per ottelu
 
   TULOS = tulot - menot
-  IF tulos < 0 AND kassavaranto < 0:
-    varoitus → IF 2. kausi negatiivinen: game over (irtisanominen)
+  kassavaranto += tulos  # kumulatiivinen saldo
+
+GAME OVER -EHTO (irtisanominen):
+  IF kassavaranto < 0 kauden lopussa:
+    varoitus (1. kerta: "Hallitus antaa lisäaikaa")
+  IF kassavaranto < 0 KAHTENA peräkkäisenä kauden lopussa:
+    game over — "Hallitus irtisanoo sinut"
+  # Kassavaranto = rahavaranto kauden lopussa, ei tilikauden tulos.
+  # Negatiivinen kassavaranto = joukkue ei pysty maksamaan palkkoja.
 
 FANITUKI (0–100):
   kasvaa: voitot, mestaruus, nuorten nostaminen
