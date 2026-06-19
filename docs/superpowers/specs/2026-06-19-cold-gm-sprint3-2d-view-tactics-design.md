@@ -1,10 +1,11 @@
-# Cold GM — Sprint 3: 2D-ottelunäkymä + taktiikat + kevyt kuori
+# Cold GM — Sprint 3: pelaajajärjestelmä + 2D-ottelunäkymä + taktiikat + kevyt kuori
 
 **Spesifikaatio | 2026-06-19 | Sprint 3**
 
 > Edeltävät: Sprint 1 (datapohja, 53 testiä) ja Sprint 2 (ottelusimu + talous, 94 testiä) valmiit.
-> Tämä spec kattaa pelin **ensimmäisen graafisen kerroksen**: 2D-otteluvisualisoinnin,
-> taktiikkanäkymän ja kevyen navigaatiokuoren, joka sitoo ne yhteen pelattavaksi silmukaksi.
+> Tämä spec kattaa pelin **ensimmäisen graafisen kerroksen** + **EHM-tasoisen pelaajajärjestelmän**:
+> rikkaat attribuutit ja profiilikortti (Vaihe 0), 2D-otteluvisualisoinnin, taktiikkanäkymän ja kevyen
+> navigaatiokuoren, joka sitoo ne yhteen pelattavaksi silmukaksi.
 
 ---
 
@@ -15,10 +16,22 @@ Tehdä pelin **pääerottautumistekijä näkyväksi ja pelattavaksi**: pelaaja a
 taktiikat (ketjut + strategia), pelaa ottelun ja **katsoo sen 2D-näkymässä** broadcast-tyylillä,
 ja näkee tuloksen. Yksi yhtenäinen silmukka uudesta pelistä otteluun ja takaisin.
 
-### Sprint 3:n kolme pilaria
+### Sprint 3:n pilarit
+0. **Pelaajajärjestelmä** (EHM-tasoinen) — rikas attribuuttimalli (~27 kenttäpelaaja-attr. +
+   MV-setti) + pelaajaprofiilikortti. Tämä on Sprint 3:n **ensimmäinen vaihe**; muut pilarit
+   rakentuvat sen päälle (kortit ja simu lukevat rikkaita attribuutteja).
 1. **Taktiikkanäkymä** (NHL-pelien tyylinen ketjueditori) — pelaaja päättää kokoonpanon ja strategian.
 2. **2D-ottelunäkymä** (broadcast-tyyli) — pre-lasketun tapahtumavirran visuaalinen toisto.
 3. **Kevyt kuori** — minimaalinen navigaatio joka tekee yllä olevista pelattavan kokonaisuuden.
+
+### Vaiheistus (toteutusjärjestys)
+- **Vaihe 0 — Pelaajajärjestelmä:** PlayerData/GoalieData rikas attribuuttimalli + meta-kentät,
+  `PlayerGenerator` (positiokohtaiset jakaumat), `overall_rating()` uudelleenpainotus,
+  `match_adapter`-komposiittimappaus (rikkaat attr. → simun inputit), Sprint 2 -testien migraatio,
+  pelaajaprofiilikortti. **Simu (C#) pysyy muuttumattomana.**
+- **Vaihe 1 — Taktiikat:** TacticsData, TacticsBuilder, ketjueditori (käyttää pelaajakortteja), simu-laajennus.
+- **Vaihe 2 — 2D-näkymä:** MatchPlayback, RinkMotion, match_view, rink.
+- **Vaihe 3 — Kuori:** scene_router, main_menu, hub, post_match, kytkennät.
 
 ### Arkkitehtoninen kulmakivi (lukittu päätös)
 Simulaatio ajetaan **kokonaan loppuun ENNEN visualisointia** (`GameRunner.run_game`
@@ -68,7 +81,9 @@ Taidesuunta on **"urheilulähetys" (broadcast)**: tumma kromi, kirkas jää, jou
 | Korostus | `#6ea8e6` | Otsikot, aktiiviset elementit |
 | Teksti | `#e2e4e9` (ensisijainen) / `#7a7f8e` (toissijainen) | |
 
-### OVR-ratingien värikoodaus (lukittu, käytetään ketjueditorissa)
+### Rating-värikoodaus (lukittu — sama 1–20-tasoasteikko OVR:lle JA yksittäisille attribuuteille)
+> `ui_palette.ovr_color(rating)` (kortin OVR) ja `ui_palette.attr_color(value)` (profiilikortin
+> attribuuttiarvot) käyttävät samaa taulukkoa.
 | Taso | Väri | Ehto (overall_rating) |
 |---|---|---|
 | Tähti | Kulta `#e3b341` | ≥ 16 |
@@ -96,13 +111,16 @@ Taidesuunta on **"urheilulähetys" (broadcast)**: tumma kromi, kirkas jää, jou
 ```
 src/
   models/
-    player_data.gd          (MUOKKAA: lisää handedness)
+    player_data.gd          (MUOKKAA: EHM-attribuutit (27) + meta + handedness; overall_rating uudelleen)
+    goalie_data.gd          (MUOKKAA: EHM-MV-attribuutit (~10) + meta)
     team_data.gd            (MUOKKAA: lisää tactics-viittaus)
     tactics_data.gd         (UUSI: ketjut, parit, MV:t, PP/PK, strategiasäätimet)
   systems/
+    player_generator.gd     (MUOKKAA: generoi kaikki EHM-attribuutit + meta, positiokohtaiset jakaumat)
+    sim_attributes.gd       (UUSI: komposiittimappaus — rikkaat attr. -> simun inputit, §5.0)
     tactics_builder.gd      (UUSI: auto_generate(team) -> TacticsData, validointi)
   sim/
-    match_adapter.gd        (MUOKKAA: build_team_input lukee tactics-rakenteen)
+    match_adapter.gd        (MUOKKAA: build_team_input käyttää sim_attributes-komposiitteja + tactics-rakenteen)
   core/
     MatchSimulator.cs       (MUOKKAA: jääaika-painot, strategiakertoimet, PP/PK-yksiköt)
     SimContext.cs           (MUOKKAA: SimSkater.IceTimeWeight, SimTeam strategiakentät/yksiköt)
@@ -117,12 +135,17 @@ src/
     tactics_screen.gd/.tscn (UUSI: ketjueditori)
     match_view.gd/.tscn     (UUSI: 2D-ottelunäkymä)
     post_match.gd/.tscn     (UUSI: tuloskooste)
+    player_profile.gd/.tscn (UUSI: täysi EHM-tyylinen profiilikortti — kaikki attribuutit, §4.8)
     components/
-      player_card.gd/.tscn  (UUSI: pelaajakortti — avatar, nimi, positio, OVR)
+      player_card.gd/.tscn  (UUSI: kompakti kortti ketjueditoriin — avatar, nimi, positio, OVR)
+      attr_grid.gd/.tscn    (UUSI: 3-sarakkeinen attribuuttiruudukko, värikoodattu (Tech/Mental/Phys))
       rink.gd/.tscn         (UUSI: kaukalo + kiekot)
 assets/
   theme/cold_gm_theme.tres  (UUSI)
 tests/gut/
+  test_player_attributes.gd (UUSI: EHM-attribuutit, overall_rating, MV-attribuutit)
+  test_player_generator.gd  (MUOKKAA/UUSI: kaikki attr. generoidaan, positiokohtaiset, rajat 1–20)
+  test_sim_attributes.gd    (UUSI: komposiittimappaus — neutraalit arvot säilyttävät Sprint 2 -käytöksen)
   test_tactics_data.gd      (UUSI)
   test_tactics_builder.gd   (UUSI)
   test_match_adapter_tactics.gd (UUSI)
@@ -135,15 +158,91 @@ tests/gut/
 
 ## 4. Datamalli
 
-### 4.1 PlayerData-lisäys
-```gdscript
-enum Handedness { LEFT, RIGHT }
-@export var handedness: Handedness = Handedness.LEFT
-```
-Vain näyttöä varten Sprint 3:ssa (kortin "L"/"R"-merkki). Generaattori arpoo sen
-(n. 60 % vasen, kuten oikeassakin jääkiekossa) — `PlayerGenerator`-päivitys.
+### 4.1 PlayerData — EHM-tasoinen attribuuttimalli (kentällispelaajat)
+Korvaa nykyiset 12 ohutta attribuuttia rikkaalla EHM-setillä. **Kaikki 1–20-asteikolla**
+(sama kuin nyt: ~10 keskiverto, ≥16 tähti) → OVR-värikoodaus säilyy. Rikkaat attribuutit ovat
+**uusi totuuslähde**; simu lukee niistä johdetut komposiitit (§5.0), ei näitä suoraan.
 
-### 4.2 TacticsData (uusi Resource)
+```gdscript
+class_name PlayerData
+extends Resource
+enum Position { FORWARD, DEFENSE, GOALIE }
+enum Handedness { LEFT, RIGHT }
+
+# --- Technical (12) ---
+@export var checking: int = 10
+@export var deflections: int = 10
+@export var deking: int = 10
+@export var faceoffs: int = 10
+@export var hitting: int = 10
+@export var off_the_puck: int = 10
+@export var passing: int = 10
+@export var pokecheck: int = 10
+@export var positioning: int = 10
+@export var slapshot: int = 10
+@export var stickhandling: int = 10
+@export var wristshot: int = 10
+# --- Mental (9) ---
+@export var aggression: int = 10
+@export var anticipation: int = 10
+@export var bravery: int = 10
+@export var creativity: int = 10
+@export var determination: int = 10
+@export var flair: int = 10
+@export var influence: int = 10
+@export var teamwork: int = 10
+@export var work_rate: int = 10
+# --- Physical (6) ---
+@export var acceleration: int = 10
+@export var agility: int = 10
+@export var balance: int = 10
+@export var speed: int = 10
+@export var stamina: int = 10
+@export var strength: int = 10
+# --- Meta / kortti ---
+@export var handedness: Handedness = Handedness.LEFT
+@export var secondary_position: Position = Position.FORWARD   # esim. RW/LW (näyttö)
+@export var height_cm: int = 183
+@export var weight_kg: int = 84
+@export var morale: int = 50         # 0–100 (vire/tahto-näyttö)
+@export var plus_minus: int = 0      # kausi +/- (kausitilasto)
+@export var penalty_minutes: int = 0 # kausi PIM (kausitilasto)
+# (säilyy ennallaan: id, etu/sukunimi, ikä, kansallisuus, position, hidden_potential,
+#  contract_years_left, annual_salary, fatigue, is_injured, injury_weeks_remaining,
+#  games_played, season_goals/assists/shots)
+```
+
+**Poistuvat vanhat attribuutit:** `skating, shooting, puck_handling, defensive_play, power_play,
+composure, team_spirit`. Niiden rooli siirtyy joko suoraan uuteen attribuuttiin (esim.
+`team_spirit → teamwork`) tai komposiittiin (§5.0). `season_shots` = SOG kortissa.
+
+### 4.2 GoalieData — EHM-MV-attribuutit
+Maalivahdeilla oma setti (EHM-tyyli). Korvaa nykyiset `save_ability, reflexes,
+goalie_positioning, mental_strength`.
+```gdscript
+# Technical: reflexes, positioning, rebound_control, recovery, puck_handling, one_on_ones (1–20)
+# Mental:    concentration, composure, bravery (1–20)
+# Physical:  agility (1–20)
+# + meta kuten PlayerData (height/weight/handedness=catches, morale)
+# + kausitilastot säilyvät: season_saves, season_shots_against, season_goals_against, season_shutouts
+```
+
+### 4.3 overall_rating() — positiopainotettu
+Ei enää tasainen 12 attr. keskiarvo. Painotettu positiittain (1–20-asteikko säilyy):
+- **Hyökkääjä:** painota Wristshot, Slapshot, Deking, Off The Puck, Speed, Anticipation.
+- **Puolustaja:** painota Pokecheck, Positioning, Checking, Hitting, Passing, Strength.
+- **Maalivahti:** painota Reflexes, Positioning, Rebound Control, One-on-Ones, Composure.
+
+Painot ovat tasapainotettavissa; lähtöpisteenä yllä mainitut "avainattribuutit" ×1.5,
+muut ×1.0, normalisoituna takaisin 1–20-alueelle. Tämä ohjaa myös OVR-värikoodausta.
+
+### 4.4 PlayerGenerator — laajennus
+Generoi kaikki EHM-attribuutit positiokohtaisilla jakaumilla (hyökkääjillä korkeammat
+laukaisu-/luistelu-attribuutit, puolustajilla pokecheck/checking/strength, MV omat).
+Arpoo myös meta-kentät: handedness (~60 % vasen), height/weight (positiokohtainen normaali­jakauma),
+secondary_position. Säilyttää nykyisen tähti/runkopelaaja-vaihtelun (`hidden_potential`-kytkentä).
+
+### 4.5 TacticsData (uusi Resource)
 ```gdscript
 class_name TacticsData
 extends Resource
@@ -181,12 +280,12 @@ func validate(team) -> Array            # palauttaa virhelistan (tyhjä = ok)
 loukkaantunut pelaaja paikalla, MV-paikalla ei-MV (tai päinvastoin), tyhjiä pakollisia paikkoja.
 UI estää otteluun siirtymisen jos lista ei ole tyhjä.
 
-### 4.3 TeamData-lisäys
+### 4.6 TeamData-lisäys
 ```gdscript
 @export var tactics: TacticsData = null   # null = auto-generoidaan tarvittaessa
 ```
 
-### 4.4 TacticsBuilder (uusi)
+### 4.7 TacticsBuilder (uusi)
 ```gdscript
 class_name TacticsBuilder
 static func auto_generate(team: TeamData) -> TacticsData
@@ -194,10 +293,20 @@ static func auto_generate(team: TeamData) -> TacticsData
 - Hyökkääjät overall-järjestyksessä → täytä L1..L4 (paikat LW/C/RW järjestyksessä).
 - Puolustajat overall-järjestyksessä → täytä parit 1..3.
 - Paras MV → starting, toiseksi paras → backup.
-- PP-yksikkö: 5 parasta `power_play + shooting` -summalla.
-- PK-yksikkö: 4 parasta `defensive_play + checking` -summalla.
+- PP-yksikkö: 5 parasta hyökkäyssummalla `wristshot + slapshot + off_the_puck + passing`.
+- PK-yksikkö: 4 parasta puolustussummalla `pokecheck + checking + positioning + work_rate`.
 - Loukkaantuneet ohitetaan; jos kenttäpelaajia/MV:itä liian vähän, jätetään paikkoja tyhjiksi
   (validointi nappaa, hätä-MV-logiikka adapterissa kattaa MV-puutteen kuten Sprint 2:ssa).
+
+### 4.8 Pelaajaprofiilikortti (`player_profile.tscn`) — UI
+Täysi EHM-tyylinen profiilikortti, hyväksytyn mockupin mukainen (broadcast-paletti). Komponentit:
+- **Otsikko:** pelinumero-avatar (joukkuevärinen), nimi, joukkue, positiot (esim. RW/LW), OVR värikoodattuna.
+- **Meta-rivi:** ikä, kansallisuus, kätisyys (Shoots/Catches), pituus/paino, palkka, sopimus, vire/morale, kunto.
+- **Attribuuttiruudukko (`attr_grid.tscn`):** kolme saraketta — Technical / Mental / Physical —
+  jokainen attribuutti nimi + arvo, **arvo värikoodattu §2:n OVR-tasoilla** (`ui_palette.attr_color`).
+- **Kausitilastorivi:** GP, G, A, P, +/−, PIM, SOG, Sh% (`season_*`-kentistä; Sh% = G/SOG).
+- MV-versio näyttää MV-attribuutit + torjunta% (`save_percentage`).
+- `attr_grid` on uudelleenkäytettävä; se ei tiedä pelaajasta muuta kuin (nimi, arvo, väri) -rivit.
 
 ---
 
@@ -205,7 +314,38 @@ static func auto_generate(team: TeamData) -> TacticsData
 
 **Taaksepäin-yhteensopivuus (kriittinen):** kaikki uudet parametrit ovat valinnaisia ja
 neutraalit oletuksilla (jääaikapaino 1.0, säätimet 50 → kertoimet ≈ 1.0). Ilman taktiikoita
-sim käyttäytyy täsmälleen kuten Sprint 2:ssa → **olemassa olevat 94 testiä pysyvät vihreinä.**
+sim käyttäytyy täsmälleen kuten Sprint 2:ssa. **Interop-dictin skeema (`"shooting"`, `"checking"`,
+`save_ability`…) pysyy ennallaan** — adapter vain laskee ne rikkaista attribuuteista (§5.0).
+Näin C#-`MatchSimulator` ei muutu lainkaan tässä vaiheessa.
+
+### 5.0 Komposiittimappaus — rikkaat attribuutit → simun inputit (`sim_attributes.gd`)
+Adapter johtaa simun odottamat komposiitit EHM-attribuuteista. **Avain:** kun kaikki rikkaat
+attribuutit ovat samalla tasolla `L`, jokainen komposiitti palautuu arvoon `L` (painot summautuvat
+1.0:aan) → Sprint 2:n testit jotka käyttivät tasaisia arvoja (esim. `shooting=10`) tuottavat
+identtisen simun, kun migratoidaan tasaiseen rikkaaseen settiin (`make_skater(10)`).
+
+Lähtöpainot (tasapainotettavissa; summa per rivi = 1.0):
+| Simun input | Kaava (EHM-attribuuteista) |
+|---|---|
+| `shooting` | 0.40·wristshot + 0.30·slapshot + 0.20·deking + 0.10·off_the_puck |
+| `passing` | 0.60·passing + 0.40·creativity |
+| `defensive_play` | 0.40·pokecheck + 0.30·positioning + 0.30·anticipation |
+| `positioning` | 0.60·positioning + 0.40·off_the_puck |
+| `power_play` | 0.35·wristshot + 0.25·passing + 0.25·off_the_puck + 0.15·creativity |
+| `speed` | 0.50·speed + 0.50·acceleration |
+| `checking` | 0.45·checking + 0.35·hitting + 0.20·aggression |
+| `composure` | 0.50·determination + 0.30·bravery + 0.20·influence |
+| `stamina` | 1.00·stamina |
+| MV `save_ability` | 0.35·reflexes + 0.30·positioning + 0.20·one_on_ones + 0.15·rebound_control |
+| MV `reflexes` / `goalie_positioning` / `mental_strength` | reflexes / positioning / concentration |
+
+Tulos pyöristetään intiksi (1–20). Testi (`test_sim_attributes.gd`) varmistaa: tasainen `L` → kaikki
+komposiitit = `L`; ja että vahva profiili tuottaa korkeamman `shooting`-komposiitin kuin heikko.
+
+**Sprint 2 -testien migraatio:** lisää testiapurit `make_skater(level)` / `make_goalie(level)`
+jotka asettavat KAIKKI rikkaat attribuutit arvoon `level`. Korvaa vanhat `p.shooting=10` /
+`g.save_ability=12` -asetukset näillä. Komposiittimappaus takaa identtisen simu-käytöksen →
+94 testin tilastolliset/determinismiväitteet pysyvät voimassa.
 
 ### 5.1 build_team_input (match_adapter.gd)
 Nykyinen: valitsee top-18 overall-rankingilla. Uusi: jos `team.tactics` on olemassa,
@@ -282,11 +422,13 @@ NHL-pelien tyylinen, hyväksytyn mockupin mukainen. Broadcast-paletti.
 - **Strategia:** kaksi liukusäädintä — Aggressiivisuus, Forecheck (0–100, oletus 50),
   kuvaavat tekstit ("Varovainen ↔ Hyökkäävä", "Passiivinen ↔ Painostava").
 
-### Pelaajakortti (`player_card.tscn`)
+### Pelaajakortti (`player_card.tscn`) — kompakti
 - Pelinumero-avatar (joukkuevärinen ympyrä + numero).
 - Nimi (sukunimi korostettuna), positiomerkki, kätisyys (L/R).
 - OVR-luku värikoodattuna (§2-taulukko `ui_palette.ovr_color`).
 - Loukkaantunut → himmennetty + "INJ"-merkki, ei valittavissa kenttäpaikalle.
+- **Klikkaus avaa täyden profiilikortin (§4.8)** — kaikki EHM-attribuutit. Sama kortti
+  saavutettavissa hubin/rosterin kautta.
 
 ### Vuorovaikutus
 - Pelaajan vaihto paikkaan: klikkaa paikka → lista valittavista (rosterista) → valitse.
@@ -431,6 +573,9 @@ laajennettuna valinnaisilla taktiikkakentillä. Tämä minimoi C#/GDScript-rajap
 
 | Taso | Mitä testataan | Miten |
 |---|---|---|
+| PlayerData/GoalieData | EHM-attribuutit olemassa, overall_rating positiopainotus, MV-attribuutit, 1–20-rajat | GUT-yksikkö |
+| PlayerGenerator | kaikki attr. generoituvat 1–20, positiokohtaiset jakaumat, meta-kentät (handedness/pituus/paino) | GUT-yksikkö |
+| sim_attributes | tasainen `L` → kaikki komposiitit = `L`; vahva > heikko; MV save_ability-komposiitti | GUT-yksikkö |
 | TacticsData | all_skater_ids, ice_time_weight_for, validate (duplikaatit, loukkaantuneet, väärä MV) | GUT-yksikkö |
 | TacticsBuilder | auto_generate täyttää 4 ketjua/3 paria/2 MV/PP/PK, ohittaa loukkaantuneet | GUT-yksikkö |
 | match_adapter | build_team_input liittää oikeat painot+säätimet+yksiköt; null-tactics = vanha polku | GUT-yksikkö |
@@ -440,7 +585,7 @@ laajennettuna valinnaisilla taktiikkakentillä. Tämä minimoi C#/GDScript-rajap
 | UI-näkymät | smoke: jokainen .tscn instantioituu headless-tilassa ilman virhettä | GUT scene-smoke |
 
 UI:n raskas visuaalinen logiikka on eristetty testattaviin luokkiin (`MatchPlayback`,
-`TacticsData`, `ui_palette.ovr_color`), joten Node/renderöintikerros pysyy ohuena.
+`TacticsData`, `sim_attributes`, `ui_palette.ovr_color/attr_color`), joten Node/renderöintikerros pysyy ohuena.
 Godot-näkymien pikseliperfektiä ei yksikkötestata; ne todennetaan smoke-testillä +
 manuaalisella `/design`-vertailulla mockupiin.
 
@@ -448,6 +593,10 @@ manuaalisella `/design`-vertailulla mockupiin.
 
 ## 11. Hyväksymiskriteerit (Sprint 3 valmis kun)
 
+- [ ] **Pelaajajärjestelmä:** pelaajilla on täysi EHM-attribuuttisetti (27 + MV-setti), generaattori
+      tuottaa ne positiokohtaisesti, ja profiilikortti näyttää ne värikoodattuna (Tech/Mental/Phys + tilastot).
+- [ ] **Simu ennallaan:** komposiittimappaus tuottaa simun inputit rikkaista attr.; C#-`MatchSimulator`
+      muuttumaton; Sprint 2:n 94 testiä migratoitu apureilla ja pysyvät vihreinä.
 - [ ] Pelaaja voi: aloittaa uuden pelin → valita joukkueen → nähdä hubin.
 - [ ] Taktiikkanäkymä: aseta ketjut, parit, MV:t, PP/PK, kaksi strategiasäädintä; auto-täyttö toimii;
       validointi estää virheellisen kokoonpanon; ulkoasu vastaa hyväksyttyä mockupia (broadcast, OVR-värit).
