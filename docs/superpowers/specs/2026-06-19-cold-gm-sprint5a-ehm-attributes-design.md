@@ -100,23 +100,30 @@ Chemistry (intangibles) käyttää nyt `teamwork` (ent. team_spirit) ja `composu
 
 ---
 
-## 5. Migraation kokonaislaajuus (8 tuotantotiedostoa)
+## 5. Migraation kokonaislaajuus (10 tuotantotiedostoa)
 | Tiedosto | Muutos |
 |---|---|
 | `models/player_data.gd` | uudet 27 attr + meta; `overall_rating` positiopainotus; poista `average_technical` |
-| `models/goalie_data.gd` | uudet 10 attr; säilytä save-tilastot |
+| `models/goalie_data.gd` | uudet 10 attr; `overall_rating` (§2.3 MV-painotus); säilytä save-tilastot |
 | `data/player_generator.gd` | generoi kaikki uudet attr (positiokohtaiset jakaumat) + meta (handedness ~60% L, pituus/paino) |
 | `data/save_manager.gd` | serialisoi/deserialisoi uudet attr (uudet lyhytavaimet; ei vanhaa yhteensopivuutta) |
 | `systems/training_system.gd` | `attrs`-lista + fokus→attribuutti-mappaus uuteen settiin |
 | `systems/role_system.gd` | §4 painot uusiin attr. |
+| `systems/lineup_system.gd` | **MV-syvyyskartta:** korvaa `save_ability`-lajittelu (rivit ~181–182) `goalie.overall_rating()`:lla (§2.3 MV-painotus → sama järjestys tasaisilla attr.) |
+| `ui/lines.gd` | **MV-näyttö:** korvaa `goalie.save_ability` (rivi ~104) `overall_rating()`:lla tai torjunta%:lla |
+| `ui/player_profile.gd` | §6 mukaan (3-sarakkeinen EHM-ruudukko) |
 | `sim/match_adapter.gd` | `build_team_input` käyttää `sim_attributes`-komposiitteja |
 | `core/MatchSimulator.cs`, `SimContext.cs` | **EI muutosta** (lukevat samat interop-avaimet shimin kautta) |
 
 **Testimigraatio:** lisää `make_skater(level)` / `make_goalie(level)` -apurit (asettavat KAIKKI rikkaat
-attr. arvoon `level`). Päivitä testit jotka asettavat vanhoja kenttiä: `test_role_system`, `test_loop_queries`,
-`test_match_adapter`, `test_lineup_system`, `test_season_manager`, `test_game_runner`, `test_training_system`,
-`test_player_generator`, `test_save_manager`. Komposiittishim takaa identtisen simu-käytöksen tasaisilla arvoilla.
-`test_match_simulator` operoi raaoilla interop-dicteillä → ei migraatiota.
+attr. arvoon `level`). Komposiittishim takaa identtisen simu-käytöksen tasaisilla arvoilla.
+- **Suorat vanha-attr.-asetukset → apureilla/uusilla nimillä:** `test_role_system`, `test_loop_queries`,
+  `test_match_adapter`, `test_lineup_system`, `test_season_manager`, `test_game_runner`,
+  `test_training_system`, `test_player_generator`, `test_loop_integration`, `test_game_state_advance`.
+- **`test_player_data.gd` — KIRJOITA UUSIKSI:** se *väittää vanhan mallin nimeltä* (12-attr-tarkistus,
+  defaultit, MV-attr-tarkistus). Päivitä asserttaamaan uusi 27/10-setti + defaultit + positiopainotettu OVR.
+- **Ei migraatiota:** `test_match_simulator` (raaat interop-dictit), `test_save_manager` (rakentaa pelaajat
+  `WorldFactory`:lla; kattaa serialisoinnin uusilla avaimilla generaattorin kautta).
 
 ---
 
