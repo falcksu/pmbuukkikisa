@@ -29,10 +29,17 @@ tapahtumavirran **toisto/replay**, EI tikittävä reaaliaikasimu.
 tekee "pikasimuloi loppuun" -toiminnosta triviaalin (lopeta animaatio, näytä jo tiedossa
 oleva tulos), ja pitää sim-logiikan ja esityskerroksen täysin erillään.
 
+**Jatkuva liike (lukittu vaatimus):** kaukalo EI ole koskaan paikallaan ottelun aikana.
+Pelaajat ja kiekko ovat **jatkuvassa, uskottavassa liikkeessä joka ruudulla**, eivät vain
+tapahtumien kohdalla. Tämän tuottaa kevyt **proseduraalinen liikemalli** (§7.4) joka pyörii
+`_process`-silmukassa pelinopeudella; oikeat tapahtumat (maali/torjunta/jäähy) ovat tämän
+virtauksen päälle laukeavia "huutomerkkejä".
+
 **Rehellisyys esityksestä:** tapahtumavirta sisältää vain maalit, torjunnat ja jäähyt
-(~50–70 tapahtumaa/ottelu). Kiekkojen ja pelaajien liike tapahtumien VÄLISSÄ on
-**proseduraalista, uskottavaa ambienssia** (Tween), ei kirjaimellinen pelaajien
-sijaintisimu. Näkymä on eloisa abstraktio joka on ankkuroitu oikeisiin tapahtumiin.
+(~50–70 tapahtumaa/ottelu). Jatkuva liike on siis **uskottava abstraktio** (hallussapidon
+virtaus + muodostelma), EI kirjaimellinen pelaajien sijaintisimu. Se on ankkuroitu oikeisiin
+tapahtumiin (kiekko on hyökkäysalueella kun maali/torjunta laukeaa) mutta liike tapahtumien
+välissä on generoitua. Tämä on tarkoituksellista, ei oikopolku.
 
 ### Laajuuden ulkopuolella (YAGNI — Sprint 4+)
 - Siirtomarkkina, sopimusneuvottelut, pelaajaskautti
@@ -101,6 +108,7 @@ src/
     SimContext.cs           (MUOKKAA: SimSkater.IceTimeWeight, SimTeam strategiakentät/yksiköt)
   match/
     match_playback.gd       (UUSI: puhdas logiikka — tapahtumavirta + kello -> visuaalitila)
+    rink_motion.gd          (UUSI: jatkuva proseduraalinen liikemalli — kosmeettinen, testattava)
   ui/
     ui_palette.gd           (UUSI: värivakiot + ovr_color(rating))
     scene_router.gd         (UUSI autoload: näkymien vaihto)
@@ -120,6 +128,7 @@ tests/gut/
   test_match_adapter_tactics.gd (UUSI)
   test_match_sim_tactics.gd (UUSI: strategia/jääaika/PP-yksikkö vaikuttavat tulokseen)
   test_match_playback.gd    (UUSI: toistologiikka)
+  test_rink_motion.gd       (UUSI: jatkuva liike — sijainnit muuttuvat, pysyvät rajoissa)
 ```
 
 ---
@@ -312,10 +321,10 @@ miesvahvuuseron oikeaksi kestoksi.
 - **Kaukalo (`rink.tscn`):** ylhäältä kuvattu jää (#e8edf2), maali-/sini-/keskiviivat, maalit.
 - **Kiekot:** 5 kenttäpelaajaa + MV per joukkue, joukkuevärisiä numeroituja ympyröitä.
   Kentällä oleva ryhmä tulee `MatchPlayback.on_ice`-tilasta (ketjun mukaan).
-- **Animaatio (Tween):**
-  - *Tapahtumien välissä:* ambienssi — kiekko ja pelaajat ajelehtivat uskottavasti (ei staattinen).
-  - *`save`/`goal`:* kiekko Tweenaa hyökkäysalueelle → laukaisijakiekko paikalleen → kiekko maalille;
-    `goal` → välähdys + tuloksen päivitys + lyhyt juhlinta; `save` → MV-animaatio + kiekko pois.
+- **Animaatio:**
+  - *Jatkuva pohjavirta:* §7.4 liikemalli ajaa kiekkoa ja pelaajia joka ruudulla — näkymä on aina liikkeessä.
+  - *`save`/`goal`:* virtaus on jo vienyt kiekon hyökkäysalueelle → laukaisijakiekko astuu esiin →
+    kiekko maalille; `goal` → välähdys + tuloksen päivitys + lyhyt juhlinta; `save` → MV-animaatio + kiekko pois.
   - *`penalty`:* rikkojan kiekko jäähyaitiolle, kentällinen putoaa (5v4) jäähyn keston ajaksi.
 - **Play-by-play -tikkeri (alapalkki):** tekstirivi per tapahtuma (käyttää `TextReport`-fraseologiaa).
 - **Kontrollit (alapalkki):**
@@ -327,7 +336,41 @@ miesvahvuuseron oikeaksi kestoksi.
 ### 7.3 Tärkeää
 - Lopputulos ja tilastot ovat jo `result`-sanakirjassa ennen kuin näkymä alkaa → näkymä ei
   voi "muuttaa" tulosta. Pikasimu = animaation ohitus.
-- Suorituskyky: yksi ottelu on ~50–70 tapahtumaa + Tween-ambienssi → kevyt. Ei huolta.
+- Suorituskyky: 12 kiekkoa + kiekko, kevyt vektorimatikka per ruutu → triviaali kuorma. Ei huolta.
+
+### 7.4 Jatkuva liikemalli — `rink_motion.gd`
+Erillinen, kosmeettinen liikemalli joka pitää kaukalon aina liikkeessä. Pyörii
+`match_view._process(delta)`-silmukassa pelinopeudella skaalattuna. **Ei vaikuta tulokseen**
+(oma seedattu RNG halutessa toistettavuuteen; erillään sim-RNG:stä). Looginen ydin erotetaan
+testattavaksi luokaksi (kuten `MatchPlayback`), näkymä vain piirtää sen tilan.
+
+```gdscript
+class_name RinkMotion
+# Jatkuva, uskottava liikevirta. Kutsutaan joka ruudulla.
+func _init(seed: int)
+func set_possession(side, attack_intensity)  # MatchPlayback ohjaa: kumpi hyökkää nyt
+func step(delta: float) -> void               # päivittää puck + 12 luistelijan sijainnit
+func puck_pos() -> Vector2                     # 0..1 normalisoitu kaukalossa
+func skater_pos(side, slot) -> Vector2         # per pelaaja
+```
+
+**Malli (lukittu pääpiirteet):**
+1. **Hallussapidon virtaus:** skalaariarvo `puck_x ∈ [0,1]` (0 = kotimaali, 1 = vierasmaali)
+   etenee jatkuvasti kohti hyökkäävän joukkueen aluetta easing-liikkeellä. Hallussapito vaihtuu
+   ajastimella (~3–8 s, satunnaistettu) JA tapahtuman kohdalla. Maalin/torjunnan jälkeen kiekko
+   palaa keskialueelle (aloitus) ja virtaus jatkuu.
+2. **Muodostelma:** kukin kentällä oleva luistelija easaa jatkuvasti kohti roolipaikkaansa
+   (hyökkäävä/neutraali/puolustava muodostelma hallussapidon mukaan) + pieni per-disci-wander
+   (sin/kohina-pohjainen) niin ettei kukaan ole koskaan paikallaan. MV pysyy maalialueella ja
+   seuraa kiekkoa sivusuunnassa.
+3. **Tapahtuma-ankkurointi:** `MatchPlayback` kertoo kun tapahtuma lähestyy → `set_possession`
+   asettaa virtauksen oikealle alueelle, jotta laukaus/maali näyttää tulevan oikeasta paikasta.
+4. **Miesvahvuus:** jäähyn aikana lyhytkätinen joukkue piirtää 4 luistelijaa (yksi aitiossa);
+   muodostelma sopeutuu (PK-boksi / PP-kehä) — kosmeettinen, kuvaa §5:n PP/PK-tilannetta.
+
+**Testattava takuu (`test_rink_motion.gd`):** usean `step()`-kutsun jälkeen kiekon ja
+luistelijoiden sijainnit ovat *muuttuneet* (ei staattinen) ja pysyvät kaukalon rajojen sisällä;
+hallussapidon vaihto siirtää virtauksen suuntaa. Tämä on "jatkuva liike" -vaatimuksen automaattivahti.
 
 ---
 
@@ -391,6 +434,7 @@ laajennettuna valinnaisilla taktiikkakentillä. Tämä minimoi C#/GDScript-rajap
 | match_adapter | build_team_input liittää oikeat painot+säätimet+yksiköt; null-tactics = vanha polku | GUT-yksikkö |
 | MatchSimulator | §5.5 tilastolliset väitteet + determinismi + Sprint 2 -regressio | GUT-through-interop |
 | MatchPlayback | toisto saavuttaa lopputuloksen, monotoninen tulos, jäähyn miesvahvuus oikein | GUT-yksikkö |
+| RinkMotion | sijainnit muuttuvat step():n yli (ei staattinen), pysyvät rajoissa, hallussapito ohjaa virtausta | GUT-yksikkö |
 | UI-näkymät | smoke: jokainen .tscn instantioituu headless-tilassa ilman virhettä | GUT scene-smoke |
 
 UI:n raskas visuaalinen logiikka on eristetty testattaviin luokkiin (`MatchPlayback`,
@@ -408,6 +452,8 @@ manuaalisella `/design`-vertailulla mockupiin.
 - [ ] Taktiikat **vaikuttavat mitattavasti** otteluun (§5.5-testit vihreinä).
 - [ ] 2D-ottelunäkymä toistaa ottelun broadcast-tyylillä: kaukalo, joukkuevärilliset numeroidut kiekot,
       HUD (tulos/erä/kello), play-by-play, kontrollit (nopeus, linjavaihto, aikalisä, pikasimu).
+- [ ] **Jatkuva liike:** kaukalo on aina liikkeessä toiston aikana (ei staattinen tapahtumien välissä);
+      `RinkMotion`-testi vahvistaa sijaintien muuttuvan ja pysyvän rajoissa.
 - [ ] Täysi silmukka pelattavissa: hub → taktiikat → pelaa ottelu → katso 2D → tulos → seuraava päivä → hub.
 - [ ] Determinismi säilyy; Sprint 2:n 94 testiä pysyvät vihreinä; uudet testit vihreinä.
 - [ ] Yksi jaettu Theme; ei kovakoodattuja värejä per näkymä; paletti §2:n mukainen.
