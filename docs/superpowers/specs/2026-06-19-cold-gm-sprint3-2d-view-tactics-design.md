@@ -115,9 +115,12 @@ src/
     goalie_data.gd          (MUOKKAA: EHM-MV-attribuutit (~10) + meta)
     team_data.gd            (MUOKKAA: lisää tactics-viittaus)
     tactics_data.gd         (UUSI: ketjut, parit, MV:t, PP/PK, strategiasäätimet)
-  systems/
+  data/
     player_generator.gd     (MUOKKAA: generoi kaikki EHM-attribuutit + meta, positiokohtaiset jakaumat)
+    save_manager.gd         (MUOKKAA: serialisoi/deserialisoi uudet attribuutit (uudet lyhytavaimet); ei vanhaa yhteensopivuutta)
+  systems/
     sim_attributes.gd       (UUSI: komposiittimappaus — rikkaat attr. -> simun inputit, §5.0)
+    training_system.gd      (MUOKKAA: `attrs`-lista + fokusmappaus uusiin EHM-attribuutteihin)
     tactics_builder.gd      (UUSI: auto_generate(team) -> TacticsData, validointi)
   sim/
     match_adapter.gd        (MUOKKAA: build_team_input käyttää sim_attributes-komposiitteja + tactics-rakenteen)
@@ -342,10 +345,35 @@ Lähtöpainot (tasapainotettavissa; summa per rivi = 1.0):
 Tulos pyöristetään intiksi (1–20). Testi (`test_sim_attributes.gd`) varmistaa: tasainen `L` → kaikki
 komposiitit = `L`; ja että vahva profiili tuottaa korkeamman `shooting`-komposiitin kuin heikko.
 
-**Sprint 2 -testien migraatio:** lisää testiapurit `make_skater(level)` / `make_goalie(level)`
-jotka asettavat KAIKKI rikkaat attribuutit arvoon `level`. Korvaa vanhat `p.shooting=10` /
-`g.save_ability=12` -asetukset näillä. Komposiittimappaus takaa identtisen simu-käytöksen →
-94 testin tilastolliset/determinismiväitteet pysyvät voimassa.
+### 5.0b Migraation kokonaislaajuus (poistuvat attribuutit)
+Poistuvat attribuutit (`skating, shooting, puck_handling, defensive_play, power_play, composure,
+team_spirit` ja MV:n `save_ability, reflexes, goalie_positioning, mental_strength`) ovat käytössä
+useassa **tuotantotiedostossa** — kaikki päivitetään Vaiheessa 0. Interop-dictin avaimet (joita
+`MatchSimulator.cs` lukee) EIVÄT muutu, joten **C# pysyy koskemattomana**.
+
+**Tuotantokoodi (MUOKKAA Vaiheessa 0):**
+| Tiedosto | Mitä |
+|---|---|
+| `models/player_data.gd`, `models/goalie_data.gd` | uudet attribuutit (§4.1–4.2), `overall_rating` (§4.3); poista `average_technical` tai päivitä |
+| `data/player_generator.gd` | generoi uudet attribuutit (§4.4); rivin 57 `avg_attr` päivitettävä |
+| `data/save_manager.gd` | serialisointi/deserialisointi uusilla lyhytavaimilla (ei vanhojen tallennusten yhteensopivuutta — peliä ei ole julkaistu) |
+| `systems/training_system.gd` | `attrs`-lista (rivit 33–35) + fokus→attribuutti-mappaus uuteen settiin |
+| `sim/match_adapter.gd` | `build_team_input` laskee komposiitit (§5.0/§5.1) `sim_attributes`-luokalla |
+| `core/MatchSimulator.cs`, `core/SimContext.cs` | **ei muutosta** (lukevat samat interop-avaimet) |
+
+**Sprint 2 -testien migraatio (5 tiedostoa).** Lisää testiapurit `make_skater(level)` /
+`make_goalie(level)` jotka asettavat KAIKKI rikkaat attribuutit arvoon `level` (komposiitti palautuu
+arvoon `level` → identtinen simu). Erityistapaukset:
+- `test_match_simulator.gd` — operoi **raakojen interop-dictien** päällä (`"shooting"`, `"save_ability"`…),
+  EI PlayerDatan. **Ei migraatiota** (avainskeema säilyy).
+- `test_match_adapter.gd` — käyttää **gradienttia** (`p.shooting = 10 + i%5`) testatakseen top-18-järjestyksen.
+  Apuri tarvitsee vaihtelevan tason (esim. `make_skater(level)` joka asettaa kaikki = level) → aseta eri
+  pelaajille eri level säilyttääkseen erottelun; ordering testataan `overall_rating()`-pohjalta.
+- `test_training_system.gd` — lukee/kirjoittaa poistuvaa `shooting`-kenttää; **uudelleenkohdista**
+  säilyvään attribuuttiin (esim. `wristshot`). Testit seuraavat TrainingSystemin uutta `attrs`-listaa.
+- `test_game_runner.gd`, `test_season_manager.gd` — korvaa suorat kenttäasetukset apureilla.
+
+Komposiittimappaus + apurit takaavat että 94 testin tilastolliset/determinismiväitteet pysyvät voimassa.
 
 ### 5.1 build_team_input (match_adapter.gd)
 Nykyinen: valitsee top-18 overall-rankingilla. Uusi: jos `team.tactics` on olemassa,
@@ -413,7 +441,7 @@ NHL-pelien tyylinen, hyväksytyn mockupin mukainen. Broadcast-paletti.
 ### Layout
 - **Otsikkopalkki:** joukkueen nimi/logo, "Tallenna & takaisin", validointivaroitus (jos virheitä).
 - **Hyökkäysketjut:** 4 riviä, kukin 3 pelaajakorttia (LW/C/RW). Ketjun oikealla reunalla
-  **kemia-mittari** (palkki) — yksinkertainen heuristiikka: ketjun keskiarvo-`team_spirit`
+  **kemia-mittari** (palkki) — yksinkertainen heuristiikka: ketjun keskiarvo-`teamwork`
   + `passing` normalisoituna (vain visuaalinen Sprint 3:ssa, ei vaikuta simuun → pidetään rehellisenä:
   mittari kuvaa "ketjun yhteensopivuutta" mutta sim käyttää jääaikapainoja, ei kemiaa).
 - **Puolustusparit:** 3 riviä, kukin 2 korttia (LD/RD) + kemia-mittari.
