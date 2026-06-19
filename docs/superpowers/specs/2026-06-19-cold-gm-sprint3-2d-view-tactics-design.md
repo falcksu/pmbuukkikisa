@@ -1,6 +1,12 @@
-# Cold GM — Sprint 3: pelaajajärjestelmä + 2D-ottelunäkymä + taktiikat + kevyt kuori
+> ⚠️ **KORVATTU (2026-06-19).** Markkinatutkimuksen jälkeen Sprint 3 uudelleenpriorisoitiin
+> **Playable Manager Loopiksi** — ks. [`2026-06-19-cold-gm-sprint3-playable-manager-loop-design.md`](2026-06-19-cold-gm-sprint3-playable-manager-loop-design.md).
+> Tämä dokumentti EI ole enää seuraava sprintti, mutta sen suunnittelu on **edelleen voimassa
+> myöhemmille sprinteille:** §4 EHM-attribuutit + §5 komposiitti/migraatio → **Sprint 6**;
+> §6 ketjueditori/chemistry → **Sprint 4**; §7 2D-näkymä → **Sprint 5**. Säilytetään lähteenä.
 
-**Spesifikaatio | 2026-06-19 | Sprint 3**
+# Cold GM — Sprint 3: pelaajajärjestelmä + 2D-ottelunäkymä + taktiikat + kevyt kuori (KORVATTU)
+
+**Spesifikaatio | 2026-06-19 | Sprint 3 — korvattu, ks. yllä**
 
 > Edeltävät: Sprint 1 (datapohja, 53 testiä) ja Sprint 2 (ottelusimu + talous, 94 testiä) valmiit.
 > Tämä spec kattaa pelin **ensimmäisen graafisen kerroksen** + **EHM-tasoisen pelaajajärjestelmän**:
