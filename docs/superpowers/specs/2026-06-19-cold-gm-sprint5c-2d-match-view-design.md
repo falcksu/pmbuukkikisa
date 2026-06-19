@@ -28,7 +28,8 @@
   harhautukset/tilastotweenit. Periaate: `RinkMotion` tuottaa sijainnit joka ruudulla; tapahtumat KAAPPAAVAT
   hetkeksi tietyt toimijat punktuaatioon ja palauttavat kontrollin virtaukselle.
 - **Degradoituu siroon virtaan:** jos vain goal/save/penalty (esim. ennen S5b:tä), näkymä toimii silti
-  (jatkuva liike + maalit/torjunnat). S5c olettaa kuitenkin S5b:n rikkaan virran täyteen kokemukseen.
+  (jatkuva liike + maalit/torjunnat). Box-score-rivit joiden lähdetapahtumia ei ole näyttävät **0** (tyhjä
+  tally ei ole bugi). S5c olettaa kuitenkin S5b:n rikkaan virran täyteen kokemukseen.
 
 ---
 
@@ -123,8 +124,11 @@ goal→välähdys+juhlinta+GOALS-skaalaus; penalty→aitio+5v4-muodostelma; take
 (pysäytä RinkMotion, snäppää tilastot/xG/aikajana loppuun → siirry game_reportiin).
 
 **S3-integraatio:** dashboard "Pelaa ottelu" → `GameRunner.run_game` (tuottaa `result`) →
-`SceneRouter.goto(match_view)` payloadissa result+nimet → 2D-replay → "Jatka/pikasimu" → S3 `game_report`
-(sama tekstikooste) → `GameState.advance()` → dashboard. **Mikään ei kosketa `result`-dictiä.**
+`SceneRouter.goto(match_view, {result, home_name, away_name})` (sama payload-muoto kuin game_report lukee nyt)
+→ 2D-replay → "Jatka/pikasimu" → S3 `game_report` (sama tekstikooste) → `GameState.advance()` → dashboard.
+**Säilytä `EventBus.match_result.emit(...)`** dashboardissa ennen `goto`:a (laukaisee dashboard-refreshin;
+älä pudota redirectissä). **`match_view` EI kutsu `GameState.advance()`** — se jää game_reportin vastuulle.
+**Mikään ei kosketa `result`-dictiä.**
 
 ---
 

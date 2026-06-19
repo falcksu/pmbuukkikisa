@@ -103,7 +103,8 @@ slap→`slapshot`, deflection→`deflections`, one_timer→`wristshot` (one-time
 ```
 { type, time, period, team, zone(DZ/NZ/OZ), danger(low/med/high|null),
   player_id, target_id, assist_id, assist2_id, result, strength(EV/PP/PK),
-  shot_type(wrist/slap/deflection/one_timer|null), xg(double) }
+  shot_type(wrist/slap/deflection/one_timer|null), xg(double),
+  duration(int, vain penalty — minuutit; S5c johtaa PIM + PP/PK-miesvahvuusikkunat tästä) }
 ```
 Tyypit: faceoff, zone_entry, pass, deke, board_battle, hit, takeaway, giveaway, shot, shot_blocked, save,
 goal, rebound, penalty. **Box-score johdetaan virrasta:** Goals=`goal`; SOG=`goal`+`save`; blokit=`shot_blocked`;
