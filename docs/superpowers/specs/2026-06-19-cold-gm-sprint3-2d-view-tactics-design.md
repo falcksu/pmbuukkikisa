@@ -216,16 +216,25 @@ ja starting goalie taktiikasta. Jos `tactics == null`, säilytä nykyinen top-18
 Olkoon `a = Aggressiveness/100`, `f = Forecheck/100` (molemmat 0.5 neutraalilla).
 Kertoimet pinotaan olemassa olevien PP/PK-kertoimien PÄÄLLE `MaybeShot`/`MaybePenalty`-funktioissa:
 
+Kaava on **autoritatiivinen**; "Alue"-sarake on vain laskettu havainnollistus (jos ne ovat
+ristiriidassa, kaava voittaa).
+
 | Kohde | Kerroin | Alue (säädin 0→100) | Neutraali @50 |
 |---|---|---|---|
-| Oma laukaustodennäköisyys | `× (0.85 + 0.30·a) × (0.90 + 0.20·f)` | 0.765 → 1.265 | 1.0 |
+| Oma laukaustodennäköisyys | `× (0.85 + 0.30·a) × (0.90 + 0.20·f)` | 0.765 → 1.518 | 1.0 |
 | Vastustajan laukaustod. | `× (0.85 + 0.30·a)` | 0.85 → 1.15 | 1.0 |
 | Vastustajan laukauslaatu | `× (1.05 − 0.10·f)` | 1.05 → 0.95 | 1.0 |
-| Oma jäähyaste (PenaltyRate) | `× (0.70 + 0.60·a) × (0.80 + 0.40·f)` | 0.56 → 1.30 | 1.0 |
+| Oma jäähyaste (PenaltyRate) | `× (0.70 + 0.60·a) × (0.80 + 0.40·f)` | 0.56 → 1.56 | 1.0 |
 
 Tulkinta: **aggressiivisuus** avaa pelin (enemmän laukauksia molempiin suuntiin) ja lisää omia
 jäähyjä; **forecheck** painostaa (enemmän omia laukauksia, häiritsee vastustajan laatua, lisää
 omia jäähyjä). Säätimet ovat per joukkue (oma taktiikka vs. vastustajan taktiikka).
+
+**Mistä SimTeamista kukin kerroin luetaan (toteuttajalle):** C#:ssa kunkin joukkueen omat
+vaikutukset lasketaan sen omassa `MaybeShot(attacking, defending)`/`MaybePenalty`-kutsussa.
+Siksi "Oma …" -rivit lukevat `attacking`-joukkueen säätimet, ja **"Vastustajan …" -rivit lukevat
+`defending`-joukkueen säätimet** ja vaikuttavat hyökkääjän laukaukseen puolustavana modifierina
+(esim. `defending.Forecheck` heikentää hyökkääjän laukauslaatua). Älä lue niitä `attacking`-joukkueesta.
 
 ### 5.4 Jääaika ja yksiköt laukaisijan valinnassa
 - `SelectShooter`: paino = `Shooting × IceTimeWeight` (oli pelkkä `Shooting`).
@@ -233,7 +242,8 @@ omia jäähyjä). Säätimet ovat per joukkue (oma taktiikka vs. vastustajan tak
 - **Ylivoimalla** (vastustajalla jäähy): laukaisija valitaan ensisijaisesti `PpUnit`-joukosta
   (paino `Shooting × IceTimeWeight`, vain PP-yksikön pelaajat; tyhjä yksikkö → koko rosteri).
 - **Alivoimalla** (omalla jäähy): laukaisija ja `SelectByChecking`-puolustaja biasoidaan
-  `PkUnit`-joukkoon vastaavasti.
+  `PkUnit`-joukkoon vastaavasti. **Tyhjä `PkUnit` → koko rosteri** (kuten PP-yksiköllä) →
+  Sprint 2 -polku säilyy muuttumattomana.
 - Determinismi säilyy: RNG-vetojen järjestys ja lähde ennallaan, vain painot muuttuvat.
 
 ### 5.5 Testattavuus (GUT-through-interop, kuten Sprint 2)
