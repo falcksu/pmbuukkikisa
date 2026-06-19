@@ -341,7 +341,7 @@ miesvahvuuseron oikeaksi kestoksi.
 ### 7.4 Jatkuva liikemalli — `rink_motion.gd`
 Erillinen, kosmeettinen liikemalli joka pitää kaukalon aina liikkeessä. Pyörii
 `match_view._process(delta)`-silmukassa pelinopeudella skaalattuna. **Ei vaikuta tulokseen**
-(oma seedattu RNG halutessa toistettavuuteen; erillään sim-RNG:stä). Looginen ydin erotetaan
+(oma, **pakollinen** seedattu RNG toistettavuuteen; erillään sim-RNG:stä). Looginen ydin erotetaan
 testattavaksi luokaksi (kuten `MatchPlayback`), näkymä vain piirtää sen tilan.
 
 ```gdscript
@@ -369,8 +369,10 @@ func skater_pos(side, slot) -> Vector2         # per pelaaja
    muodostelma sopeutuu (PK-boksi / PP-kehä) — kosmeettinen, kuvaa §5:n PP/PK-tilannetta.
 
 **Testattava takuu (`test_rink_motion.gd`):** usean `step()`-kutsun jälkeen kiekon ja
-luistelijoiden sijainnit ovat *muuttuneet* (ei staattinen) ja pysyvät kaukalon rajojen sisällä;
-hallussapidon vaihto siirtää virtauksen suuntaa. Tämä on "jatkuva liike" -vaatimuksen automaattivahti.
+luistelijoiden sijainnit ovat siirtyneet **vähintään määritellyn minimimatkan** (ei pelkkä
+`!=`, vaan riittävä magnitudi → oikeasti näkyvää liikettä, ei mikrovärinää) ja pysyvät kaukalon
+rajojen sisällä; hallussapidon vaihto siirtää virtauksen suuntaa. Seed on kiinteä → testi on
+toistettava. Tämä on "jatkuva liike" -vaatimuksen automaattivahti.
 
 ---
 
