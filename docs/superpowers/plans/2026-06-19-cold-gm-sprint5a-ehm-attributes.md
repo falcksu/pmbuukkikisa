@@ -60,20 +60,24 @@ func test_goalie_new_attributes_exist():
 ```
 
 - [ ] **Step 2: Run → FAIL.**
-- [ ] **Step 3: Implement** — add to `player_data.gd` (KEEP the old 12 for now):
+- [ ] **Step 3: Implement** — add to `player_data.gd` (KEEP the old 12 for now). **Do NOT redeclare the five names that already exist** (`passing, positioning, speed, stamina, checking`) — a duplicate `@export` is a GDScript parse error. Add only the genuinely new fields:
 ```gdscript
 enum Handedness { LEFT, RIGHT }
-# Technical (12)
-@export var checking: int = 10
+# Technical (new): deflections, deking, faceoffs, hitting, off_the_puck, pokecheck, slapshot, stickhandling, wristshot
 @export var deflections: int = 10
 @export var deking: int = 10
 @export var faceoffs: int = 10
 @export var hitting: int = 10
 @export var off_the_puck: int = 10
-@export var passing_new: int = 10   # NOTE: 'passing' already exists (old). Use a temp then rename in Task 12.
-# ... (see note below)
+@export var pokecheck: int = 10
+@export var slapshot: int = 10
+@export var stickhandling: int = 10
+@export var wristshot: int = 10
+# Mental (all 9 new): aggression, anticipation, bravery, creativity, determination, flair, influence, teamwork, work_rate
+# Physical (new): acceleration, agility, balance, strength   (speed/stamina already exist)
+# Meta: handedness (enum), secondary_position (Position), height_cm:int=183, weight_kg:int=84
 ```
-**Naming-collision note:** `passing`, `positioning`, `speed`, `stamina`, `checking` already exist as old attributes. For these five, the old field already carries the right meaning — KEEP the existing field and do NOT add a duplicate. The genuinely new skater fields to add are: `deflections, deking, faceoffs, hitting, off_the_puck, pokecheck, slapshot, stickhandling, wristshot` (technical), all 9 mental, and `acceleration, agility, balance, strength` (physical — `speed`/`stamina` already exist). Plus meta: `handedness`, `secondary_position`, `height_cm`, `weight_kg`.
+**Naming-collision note (verified by review):** exactly five names collide — `passing, positioning, speed, stamina, checking`. Keep the existing field for those five; their meaning already matches. No other collision exists.
 For `goalie_data.gd` add: `rebound_control, recovery, one_on_ones, concentration` (`reflexes` exists; `positioning`/`bravery`/`agility`/`puck_handling`/`composure` come from the parent during this phase).
 
 - [ ] **Step 4: Run → PASS** + full suite still green.
@@ -144,16 +148,28 @@ static func _r(v: float) -> int:
 
 **Files:** Create `tests/gut/lib/attr_helpers.gd` (a plain helper, or inline per test); Test: used by later tasks.
 
-- [ ] Add a helper that sets ALL new attributes (and old, during additive phase) to a level, so migrated tests get predictable uniform inputs:
+- [ ] Add a helper that sets ALL attributes (new + the five shared old names) to a level via an **explicit list** (not reflection), so migrated tests get predictable uniform inputs:
 ```gdscript
 class_name AttrHelpers
+
+const SKATER_ATTRS := ["deflections","deking","faceoffs","hitting","off_the_puck","pokecheck",
+	"slapshot","stickhandling","wristshot","aggression","anticipation","bravery","creativity",
+	"determination","flair","influence","teamwork","work_rate","acceleration","agility","balance",
+	"strength","passing","positioning","speed","stamina","checking"]
+const GOALIE_ATTRS := ["reflexes","positioning","rebound_control","recovery","puck_handling",
+	"one_on_ones","concentration","composure","bravery","agility"]
+
 static func make_skater(id: String, level: int) -> PlayerData:
 	var p := PlayerData.new(); p.id = id
-	for a in PlayerData.new().get_property_list():
-		pass # set known attribute list explicitly (see Task 2 list) to `level`
+	for a in SKATER_ATTRS: p.set(a, level)
 	return p
+
+static func make_goalie(id: String, level: int) -> GoalieData:
+	var g := GoalieData.new(); g.id = id
+	for a in GOALIE_ATTRS: g.set(a, level)
+	return g
 ```
-(Set the explicit attribute list, not reflection, for clarity.) Include `make_goalie(id, level)` setting goalie attrs too.
+(During the additive phase `puck_handling`/`composure` resolve to the inherited old fields; after Task 12 they resolve to the goalie-owned fields — same `.set()` call works either way.)
 - [ ] **Commit** — `test: shared attribute helpers`
 
 ---
@@ -249,7 +265,13 @@ static func make_skater(id: String, level: int) -> PlayerData:
 
 **Files:** Modify `player_data.gd`, `goalie_data.gd`; Rewrite `tests/gut/test_player_data.gd`; fix `test_loop_integration.gd`, `test_game_state_advance.gd`
 - [ ] **Step 1:** Rewrite `test_player_data.gd` to assert the NEW 27/10 model (existence, defaults, positiopainotettu OVR) — remove the old-model assertions.
-- [ ] **Step 2:** Migrate `test_loop_integration` (`team_spirit`/`composure`) and `test_game_state_advance` (`shooting`/`save_ability`) to helpers/new attrs.
+- [ ] **Step 2:** Migrate EVERY remaining test that sets a removed field via **direct property assignment** (these throw at runtime once the field is gone — unlike `.set("name",…)` which silently no-ops). The complete list (verified by review — do not drop any):
+  - `test_loop_integration.gd` (`team_spirit`, `composure`)
+  - `test_game_state_advance.gd` (`shooting`, `save_ability`)
+  - `test_season_manager.gd` (`p.shooting`, `g.save_ability` at lines ~16/18/36/38)
+  - `test_game_runner.gd` (`p.shooting`, `g.save_ability` at lines ~11/13)
+  - `test_loop_queries.gd` (`p.shooting=19`, `p.power_play=17`, `p.puck_handling=16`, `p.defensive_play=8` + `.set("skating"/"power_play"/…)`)
+  Mapping for fixtures: survivors `shooting→wristshot`, `save_ability→reflexes`; for the rest use `AttrHelpers.make_skater/make_goalie(level)` then bump specific new attrs. **Important:** `test_loop_queries`'s role-fit fixture expects a SNIPER — set `wristshot/slapshot/deking` high (not `shooting`), consistent with the Task 6 RoleSystem remap, so `RoleSystem.player_type` still returns `SNIPER`.
 - [ ] **Step 3:** Remove old fields from `PlayerData` (`skating, shooting, puck_handling, defensive_play, power_play, composure, team_spirit`) and `GoalieData` (`save_ability, goalie_positioning, mental_strength`). Declare goalie-owned `puck_handling` and `composure` on `GoalieData` now (parent no longer has them). Remove `average_technical`.
 - [ ] **Step 4: Run → grep confirms zero references to removed names in src/ and tests/; full suite GREEN (all 136 + new tests).**
 - [ ] **Step 5: Commit** — `refactor(model): remove legacy 12-attribute set`
