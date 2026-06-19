@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cold GM — pelisuunnitelma</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #14161b;
+    color: #e2e4e9;
+    line-height: 1.65;
+    padding: 0 0 48px;
+  }
+
+  .hero {
+    background: linear-gradient(160deg, #1a1d26 0%, #0f1117 100%);
+    border-bottom: 1px solid #2a2d38;
+    padding: 36px 20px 28px;
+    text-align: center;
+  }
+
+  .hero-badge {
+    display: inline-block;
+    background: #1e3a5f;
+    color: #6ea8e6;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 99px;
+    margin-bottom: 14px;
+  }
+
+  h1 {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: #ffffff;
+    margin-bottom: 8px;
+  }
+
+  .hero-sub {
+    font-size: 14px;
+    color: #7a7f8e;
+  }
+
+  .content {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+
+  section {
+    margin-top: 32px;
+  }
+
+  h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6ea8e6;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #22252e;
+  }
+
+  p {
+    font-size: 15px;
+    color: #c8cad4;
+    margin-bottom: 12px;
+  }
+
+  strong {
+    color: #e2e4e9;
+    font-weight: 600;
+  }
+
+  /* Sprint status table */
+  .sprint-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+
+  .sprint-table th {
+    text-align: left;
+    color: #7a7f8e;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0 8px 8px;
+    border-bottom: 1px solid #22252e;
+  }
+
+  .sprint-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #1e2028;
+    vertical-align: top;
+    color: #c8cad4;
+  }
+
+  .sprint-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+
+  .badge-done   { background: #1a3a27; color: #57b368; }
+  .badge-wip    { background: #2e2410; color: #e3b341; }
+  .badge-future { background: #1e2028; color: #5a5f6e; }
+
+  /* Stat cards */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .stat-card {
+    background: #1a1d26;
+    border: 1px solid #22252e;
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .stat-number {
+    font-size: 28px;
+    font-weight: 800;
+    color: #e3b341;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: #7a7f8e;
+    font-weight: 500;
+  }
+
+  /* Feature cards */
+  .feature-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .feature-card {
+    background: #1a1d26;
+    border: 1px solid #22252e;
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .feature-icon {
+    font-size: 20px;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .feature-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #e2e4e9;
+    margin-bottom: 3px;
+  }
+
+  .feature-desc {
+    font-size: 13px;
+    color: #7a7f8e;
+    line-height: 1.5;
+  }
+
+  /* Proof block */
+  .proof-block {
+    background: #1a1d26;
+    border: 1px solid #2a2d38;
+    border-left: 3px solid #57b368;
+    border-radius: 10px;
+    padding: 16px;
+    font-size: 14px;
+    color: #c8cad4;
+  }
+
+  .proof-block .player {
+    font-size: 18px;
+    font-weight: 800;
+    color: #e3b341;
+    margin: 6px 0 2px;
+  }
+
+  /* Price cards */
+  .price-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .price-card {
+    background: #1a1d26;
+    border: 1px solid #22252e;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .price-card .phase {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #7a7f8e;
+    margin-bottom: 6px;
+  }
+
+  .price-card .price {
+    font-size: 26px;
+    font-weight: 800;
+    color: #e2e4e9;
+    margin-bottom: 4px;
+  }
+
+  .price-card .note {
+    font-size: 12px;
+    color: #57b368;
+  }
+
+  .price-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3a3d48;
+    font-size: 20px;
+    margin: 0 -2px;
+  }
+
+  .price-row-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Tech pill list */
+  .pill-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .pill {
+    background: #1e2028;
+    border: 1px solid #2a2d38;
+    color: #c8cad4;
+    font-size: 13px;
+    padding: 5px 12px;
+    border-radius: 99px;
+  }
+
+  footer {
+    margin-top: 48px;
+    padding: 20px 16px 0;
+    text-align: center;
+    font-size: 12px;
+    color: #3a3d48;
+    border-top: 1px solid #1e2028;
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-badge">Kesäkuu 2026 · Solo-projekti</div>
+  <h1>Cold GM</h1>
+  <p class="hero-sub">Jääkiekko-manageri PC:lle (Steam)</p>
+</div>
+
+<div class="content">
+
+  <section>
+    <h2>Mikä tämä on</h2>
+    <p>
+      Cold GM on yksinpelattava jääkiekko-manageri: johdat seuraa kuin oikea GM.
+      Valitset kokoonpanot, asetat taktiikat, hoidat talouden ja siirrot —
+      ja viet joukkueen kauden läpi runkosarjasta pudotuspeleihin.
+    </p>
+    <p>
+      <strong>Tärkein erottautumistekijä:</strong> 2D-otteluvisualisointi.
+      Et lue tekstiraporttia — katsot joukkuettasi kentällä reaaliajassa.
+      Tämä puuttuu pääkilpailijalta (Franchise Hockey Manager).
+    </p>
+  </section>
+
+  <section>
+    <h2>Missä mennään</h2>
+    <table class="sprint-table">
+      <thead>
+        <tr>
+          <th>Vaihe</th>
+          <th>Sisältö</th>
+          <th>Tila</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Sprint 1</strong></td>
+          <td>Datapohja — 6 liigaa, 120 joukkuetta, ~3 000 pelaajaa, kalenteri, tallennus</td>
+          <td><span class="badge badge-done">✓ Valmis</span></td>
+        </tr>
+        <tr>
+          <td><strong>Sprint 2</strong></td>
+          <td>Ottelusimulaatio + talous — koko kausi, tilastot, palkat, kehitys</td>
+          <td><span class="badge badge-done">✓ Valmis</span></td>
+        </tr>
+        <tr>
+          <td><strong>Sprint 3</strong></td>
+          <td>2D-ottelunäkymä + taktiikat (seuraavaksi)</td>
+          <td><span class="badge badge-wip">🔨 Suunniteltu</span></td>
+        </tr>
+        <tr>
+          <td><strong>Sprint 4</strong></td>
+          <td>Steam-integraatio, modaus, viimeistely</td>
+          <td><span class="badge badge-future">— Tulossa</span></td>
+        </tr>
+        <tr>
+          <td><strong>Sprint 5</strong></td>
+          <td>Tasapainotus + Early Access -julkaisu</td>
+          <td><span class="badge badge-future">— Tulossa</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Moottori toimii jo</h2>
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-number">94</div>
+        <div class="stat-label">automaattitestiä läpi</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">13s</div>
+        <div class="stat-label">kokonainen kausi simuloituu</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">1 800</div>
+        <div class="stat-label">ottelua / kausi (+ pudotuspelit)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">~3 000</div>
+        <div class="stat-label">fiktiivistä pelaajaa</div>
+      </div>
+    </div>
+
+    <div class="proof-block" style="margin-top:12px">
+      Juuri simuloitu kausi, Central Premier League:<br>
+      Mestari: <span class="player">Capital Cougars 🏆</span>
+      Pistepörssi: <strong>Olli Forsberg — 22 maalia, 28 pistettä</strong><br>
+      <span style="color:#5a5f6e;font-size:13px">Kaikki nimet, tulokset ja tilastot syntyivät automaattisesti simulaattorista.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Sprint 3 — mitä rakennetaan seuraavaksi</h2>
+    <div class="feature-list">
+      <div class="feature-card">
+        <div class="feature-icon">🏒</div>
+        <div>
+          <div class="feature-title">Katsottava 2D-ottelu</div>
+          <div class="feature-desc">Pelaajat liikkuvat kentällä tapahtumien mukaan, ketjut vaihtuvat, maaleissa animaatio.</div>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎮</div>
+        <div>
+          <div class="feature-title">Ottelunsisäiset kontrollit</div>
+          <div class="feature-desc">Linjavaihto, aikalisä, "pikasimuloi loppuun", nopeussäätö 1× / 2× / 4×.</div>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <div>
+          <div class="feature-title">Taktiikat joilla on väliä</div>
+          <div class="feature-desc">Aseta ketjut + kaksi strategiasäädintä (hyökkäävyys, forecheck). Valinnat muuttavat lopputulosta mitattavasti.</div>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🖥</div>
+        <div>
+          <div class="feature-title">Ensimmäinen pelattava kuori</div>
+          <div class="feature-desc">Koti → taktiikat → "pelaa seuraava ottelu" → katso 2D:nä → tulos. Broadcast-tyyli: tumma UI, kirkas jää.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Kaupallinen suunnitelma</h2>
+    <div class="price-row-wrapper">
+      <div class="price-card" style="flex:1">
+        <div class="phase">Early Access</div>
+        <div class="price">14,99 €</div>
+        <div class="note">Steam EA</div>
+      </div>
+      <div style="color:#3a3d48;font-size:22px;padding:0 2px">→</div>
+      <div class="price-card" style="flex:1">
+        <div class="phase">Täysi julkaisu</div>
+        <div class="price">24,99 €</div>
+        <div class="note">EA-ostajat pysyvästi</div>
+      </div>
+    </div>
+    <p style="margin-top:12px;font-size:13px;color:#7a7f8e">
+      Ei tilauksia, ei mikromaksuja. Steam Workshop (ilmainen modaus).
+      DLC-polku julkaisun jälkeen: Legends Pack, lisäliigoja, kosmetiikkaa.
+    </p>
+  </section>
+
+  <section>
+    <h2>Tekniikka</h2>
+    <div class="pill-list">
+      <span class="pill">Godot 4.6</span>
+      <span class="pill">C# (ottelusimulaattori)</span>
+      <span class="pill">GDScript (logiikka)</span>
+      <span class="pill">GitHub + CI</span>
+      <span class="pill">Steam (tavoite)</span>
+    </div>
+    <p style="margin-top:12px;font-size:13px;color:#7a7f8e">
+      Yhden hengen projekti. Jokainen vaihe testattu ennen seuraavaa.
+    </p>
+  </section>
+
+</div>
+
+<footer>Cold GM · falcksu@gmail.com · Kesäkuu 2026</footer>
+
+</body>
+</html>
