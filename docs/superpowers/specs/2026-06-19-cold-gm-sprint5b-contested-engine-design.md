@@ -34,6 +34,9 @@ komposiittishim poistuu simupolulta).
   (kuten S4:ssä: `clampi(attr + mod, 1, 20)`), TAI lähettää `line_chemistry`-kentän jonka moottori lukee
   `ctx`-modifierina kontesteissa. **Päätös:** lähetä molemmat — nudge attribuutteihin (säilyttää S4-käytöksen)
   + `line_chemistry` per pelaaja (moottori voi käyttää myöhempään hienosäätöön). S5b lukee toistaiseksi nudgatut attr.
+  **HUOM defensive-nudge:** S4:n `defensive_mod` nosti komposiittia `defensive_play` (poistuu boundarylta) →
+  kohdista se nyt rikkaisiin attr. `pokecheck` + `positioning` (jotka syöttävät puolustuskontesteja 6/7/10),
+  ettei two-way/shutdown-D-chemistryn puolustusvaikutus katoa.
 - **Replay-arkkitehtuuri ennallaan:** simu ajetaan loppuun → `result` (tulos + `events[]` + tilastot + xG).
 
 ---
@@ -83,7 +86,7 @@ GAME: aloitus → loop kunnes kello loppuu:
 | 9 | Hitti | 0.45·hitting + 0.25·strength + 0.20·aggression + 0.10·speed | väistö 0.45·balance + 0.30·strength + 0.15·anticipation + 0.10·agility | 3.0 | osuma kiekolliseen→erotus; aggressio→jäähyriski |
 | 10 | Blokki | 0.50·(laukaustyyppi) + 0.30·creativity + 0.20·off_the_puck | 0.50·positioning + 0.25·bravery + 0.15·anticipation + 0.10·determination | 3.0 | Bravery=blokkihalu |
 | 11 | Torjunta/maali | laukaustyyppi + xG-konteksti (§7) | MV 0.45·reflexes + 0.20·positioning + 0.15·one_on_ones + 0.10·rebound_control + 0.10·composure | viritetty | **p_goal = xG** |
-| 12 | Jäähy | (vedetään) | rikkoja 0.55·aggression + 0.25·(20−composure-johd.) + 0.20·holtittomuus | — | tapahtumista 7/9 + slider |
+| 12 | Jäähy | (vedetään, ei Contest()) | rikkoja painotettu 0.55·aggression + 0.25·(20−composure-johd.) + 0.20·hitting | — | tapahtumista 7/9 + slider; offender valitaan painolla (kuten nyk. SelectByChecking) |
 | 13 | Rebound | off_the_puck + anticipation (irtokiekko) | MV 0.70·rebound_control + 0.20·recovery + 0.10·positioning | 3.0 | MV→jäädytys; hyökkääjä→rebound (xG-boost) |
 | 14 | Takeaway/giveaway | — (tapahtumien 5/6/7/9 lopputulos) | — | — | emergentti, attribuuttipohjainen |
 
@@ -91,6 +94,8 @@ GAME: aloitus → loop kunnes kello loppuu:
 
 **Laukaustyyppi (§4 tutkimus):** wrist (oletus, wristshot+creativity), slap (etäältä, slapshot+strength),
 deflection (maalin edestä, deflections+off_the_puck+bravery), one-timer (syötön jälkeen, +xG, rasittaa reflexes).
+**Rivien 10–11 `(laukaustyyppi)` = aktiivisen laukaustyypin attribuutti:** wrist→`wristshot`,
+slap→`slapshot`, deflection→`deflections`, one_timer→`wristshot` (one-timer-bonus xG:ssä, ei blendissä).
 
 ---
 
