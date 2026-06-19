@@ -93,9 +93,11 @@ src/systems/
   loop_queries.gd            (UUSI: puhtaat apurit — seuraava ottelu, taulukko-rivit, rosteri-rivit, pörssi)
 assets/theme/cold_gm_theme.tres  (UUSI)
 tests/gut/
-  test_loop_queries.gd       (UUSI)
+  test_loop_queries.gd       (UUSI: next_game, taulukko, pörssi, tähti, player_name)
+  test_game_state_advance.gd (UUSI: vaiheorkestrointi — runkosarja→playoffit→kausivaihto, ei jumia)
   test_ui_smoke.gd           (UUSI: jokainen .tscn instantioituu headless ilman virhettä)
   test_ui_palette.gd         (UUSI: ovr_color/attr_color rajat)
+src/autoload/game_state.gd   (MUOKKAA: lisää vaihetietoinen advance() — §4.8, UI-glue)
 project.godot                (MUOKKAA: main scene = main_menu; autoloadit: SceneRouter)
 ```
 
@@ -119,6 +121,8 @@ Lukee `GameState.world`. Näyttää:
 - Kassa (`cash_balance`) ja kevyt talousvihje.
 - Napit: Rosteri, Sarjataulukko, **Pelaa ottelu** (jos oma ottelu tänään) / **Edistä päivää**, Tallenna.
 - Kuuntelee `EventBus`-signaaleja (match_result, game_day_advanced, season_ended) päivittääkseen näkymän.
+- **HUOM:** `season_ended` kantaa kahta merkitystä: mestarin id TAI `"GAME_OVER:<id>"`. Dashboard
+  haarauttaa `"GAME_OVER:"`-prefiksillä (mestari ≠ game over).
 
 ### 4.4 roster
 Pelaajalista `player_row`-komponenteilla: pelinumero/positio, nimi, ikä, OVR (värikoodattu),
@@ -140,39 +144,65 @@ top-10 (`loop_queries.scoring_leaders`). (Liigan vaihto valinnainen lisä.)
 ### 4.7 Ottelun pelaaminen + game_report
 - "Pelaa ottelu": `loop_queries.next_game_for(world, player_team)` → `GameRunner.run_game(game, home,
   away, seed)` (sama seed-johtaminen kuin SeasonManagerissa) → `TextReport.generate(result, ...)`.
-- game_report: lopputulos (OT-merkki), maalit erittäin (aika/tekijä/syöttäjä), laukaukset, **tähtipelaaja**
-  (eniten pisteitä ottelussa), play-by-play tekstinä. "Jatka" → `GameState.advance_day()` pelaa loput
-  sen päivän AI-ottelut → dashboard.
-- Reuna: jos pelaajan ottelua ei tänään, dashboard näyttää "Edistä päivää" joka kutsuu `advance_day`.
-- Kausi valmis → SeasonManager ajaa playoffit + kausivaihdon; dashboard näyttää uuden kauden / mestarin.
-  Game over (`consecutive_negative_seasons >= 2`) → "GAME_OVER:"-signaali → lopetusruutu/uusi peli.
+- game_report: lopputulos (OT-merkki), maalit erittäin (aika/tekijä/syöttäjä, **nimet** ei id:t —
+  `loop_queries.player_name`), laukaukset, **tähtipelaaja**, play-by-play tekstinä. "Jatka" →
+  `GameState.advance(world)` (vaihetietoinen, §4.8) → dashboard.
+- Reuna: jos pelaajan ottelua ei tänään, dashboard näyttää "Edistä päivää" joka kutsuu `GameState.advance`.
+- Kausi valmis → vaiheorkestrointi (§4.8) ajaa playoffit + kausivaihdon; dashboard näyttää mestarin / uuden kauden.
+  Game over → `season_ended.emit("GAME_OVER:"+team_id)` → lopetusruutu/uusi peli.
+
+### 4.8 Kausivaiheen orkestrointi (GameState-lisäys — UI-glue, EI sim/malli-muutos)
+**Reviewin nostama aukko:** nyk. `GameState.advance_day()` kutsuu vain `_season_manager.advance_day`
+(pelaa päivän ottelut + kasvattaa päivää) — se EI havaitse runkosarjan päättymistä eikä aja playoffeja
+tai kausivaihtoa. Vain `simulate_full_season` ketjuttaa ne. Loop tarvitsee **vaihetietoisen edistyksen**.
+
+Lisätään `GameState.advance(world)` (tai laajenna `advance_day`), joka käyttää SeasonManagerin
+**julkista APIa** (`is_regular_season_complete`, `run_playoffs`, `end_season`) — GDScript-glue
+autoloadissa, ei kosketa C#-simua, malleja eikä taloutta:
+```gdscript
+func advance() -> void:
+    if not _all_premier_regular_complete():
+        _season_manager.advance_day(world)
+    elif not _all_premier_playoffs_complete():
+        for lg in _premier_leagues(): _season_manager.run_playoffs(world, lg)
+    else:
+        _season_manager.end_season(world)   # talous, nousu/putoaminen, uusi kausi+kalenteri
+```
+Apurit `_all_premier_regular_complete` / `_all_premier_playoffs_complete` / `_premier_leagues`
+iteroivat `world.leagues` (tier == PREMIER). Testataan `test_game_state_advance.gd`:llä:
+runkosarja → playoffit → kausivaihto → seuraavan kauden runkosarja, ilman jumiutumista.
 
 ---
 
-## 5. Olemassa olevan moottorin uudelleenkäyttö (ei simumuutoksia)
+## 5. Olemassa olevan moottorin uudelleenkäyttö
 
 | Tarve | Käytetään | Muutos |
 |---|---|---|
 | Maailman luonti / pelin aloitus | `GameState.start_new_game` (WorldFactory) | ei |
 | Ottelun ajo | `GameRunner.run_game` | ei |
-| Päivän edistys + AI-ottelut + viikkotreeni | `SeasonManager.advance_day` (GameState kautta) | ei |
-| Playoffit + kausivaihto | `SeasonManager.run_playoffs/end_season` | ei |
+| Päivän edistys + AI-ottelut + viikkotreeni | `SeasonManager.advance_day` | ei |
+| Playoffit + kausivaihto | `SeasonManager.run_playoffs/end_season` | ei (metodit ennallaan) |
+| **Vaiheorkestrointi** (runkosarja→playoffit→kausivaihto) | **`GameState.advance` (UUSI glue)** | **UUSI GDScript-glue autoloadissa, käyttää SeasonManagerin julkista APIa** |
+| Id → pelaajan nimi (raportti/pörssi) | **`loop_queries.player_name(world, id)` (UUSI)** | UUSI apuri (raaka virta käyttää id:itä) |
 | Otteluraportti | `TextReport.generate` | ei |
 | Tallennus/lataus | `GameState.save/load_slot` (SaveManager) | ei |
 | Signaalit | `EventBus` (match_result, game_day_advanced, season_ended) | ei (UI kuuntelee) |
 
-**Simu, mallit ja talous pysyvät koskemattomina.** Tämä on puhtaasti UI-kerros + ohuet kyselyapurit.
+**Simu (C#), mallit ja talous pysyvät koskemattomina.** Ainoa uusi ei-UI-koodi on
+`GameState`-vaiheorkestrointi (§4.8) — GDScript-glue joka käyttää SeasonManagerin julkista APIa.
 
 ---
 
 ## 6. Testattavat apurit + smoke-testit
 
 UI:n logiikka eristetään `loop_queries.gd`-luokkaan (puhdas, ei Node-riippuvuutta):
-- `next_game_for(world, team) -> ScheduledGame` (seuraava pelaamaton oma ottelu).
+- `next_game_for(world, team) -> ScheduledGame` (seuraava pelaamaton oma ottelu; suodatin `not is_played`).
 - `standings_rows(league) -> Array` (lajiteltu taulukko: sija, W-L-OTL-P-GF-GA-GD).
 - `roster_rows(team) -> Array` (lajiteltu pelaajalista + status).
-- `scoring_leaders(league, n) -> Array` (pistepörssi kausitilastoista).
-- `star_of_game(result) -> String` (ottelun tähti).
+- `scoring_leaders(league, n) -> Array` (pistepörssi — iteroi **kaikki liigan joukkueet**, ei vain omaa).
+- `star_of_game(result, world) -> String` (ottelun tähti; palauttaa **nimen** id:n sijaan).
+- `player_name(world, id) -> String` (id → "Etunimi Sukunimi"; raaka tapahtumavirta käyttää id:itä,
+  joten raportti/pörssi/tähti resolvoivat nimet tällä).
 
 **Testit:**
 - `test_loop_queries.gd` — kukin apuri (seuraava ottelu, taulukon järjestys/tiebreak, pörssi, tähti).
@@ -189,8 +219,9 @@ UI:n logiikka eristetään `loop_queries.gd`-luokkaan (puhdas, ei Node-riippuvuu
 main_menu ─Uusi peli→ team_select ─valitse→ GameState.start_new_game ─→ dashboard
 dashboard ←lukee── GameState.world  (EventBus-signaalit päivittävät näkymän)
 dashboard ─Pelaa→ loop_queries.next_game_for → GameRunner.run_game → TextReport → game_report
-game_report ─Jatka→ GameState.advance_day (AI-ottelut, viikkotreeni, EventBus) → dashboard
-[kausi valmis] → SeasonManager: playoffit → end_season (talous, nousu/putoaminen, uusi kalenteri) → dashboard
+game_report ─Jatka→ GameState.advance (§4.8 vaihetietoinen) → dashboard
+   ├─ runkosarja kesken → SeasonManager.advance_day (AI-ottelut, viikkotreeni, EventBus)
+   └─ runkosarja valmis → run_playoffs (kaikki premier) → end_season (talous, nousu/putoaminen, uusi kalenteri)
 dashboard ─Tallenna→ GameState.save();  main_menu ─Jatka→ GameState.load_slot → dashboard
 ```
 
