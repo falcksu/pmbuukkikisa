@@ -91,6 +91,12 @@ CREATE TABLE IF NOT EXISTS deals (
 - **id**: `player_id + '_' + date_key + '_' + juokseva` (esim. `mikko:tampere_2026-06-22_3`).
   Juokseva numero = pelaajan kyseisen päivän kaupparivien määrä + 1. Tämä takaa
   vakaan, ennustettavan id:n upsert-pohjaiseen tallennukseen ja poistoon ilman uuid-riippuvuutta.
+  **id on läpinäkymätön avain:** sitä käytetään aina kokonaisuutena (upsert/delete/lookup),
+  EI koskaan pilkota takaisin osiin (`id.split('_')` on kielletty — player_id voi sisältää `_`).
+- **Juoksevan numeron kilpailutilanne (tiedostettu reunatapaus):** kaksi nopeaa
+  kauppakirjausta (tai kaksi laitetta) voi laskea saman juoksevan numeron ja upsert
+  ylikirjoittaisi toisen. Käyttötapa on yksi pelaaja per näkymä, joten riski on pieni;
+  juokseva numero lasketaan paikallisesta deals-tilasta. Hyväksytään reunatapaus tässä vaiheessa.
 - **megis**: numeric (= MWh, 1:1).
 - **eurot**: numeric.
 - **toimiala**: vapaa teksti, voi olla tyhjä.
@@ -126,6 +132,11 @@ samaa polkua), joka tuottaa pelaajalle:
 
 Aggregaatit lasketaan client-puolella deals-riveistä, samaa periaatetta kuin
 nykyiset buukit lasketaan `daily_stats`-riveistä (deals-rivit = totuuden lähde).
+
+**Yksi yhtenäinen uudelleenlaskupolku:** kauppa-aggregaatit ja daily_stats-aggregaatit
+lasketaan samoissa triggereissä (init, realtime-refetch, paikallinen mutaatio), jotta
+pelaaja-objekti pysyy johdonmukaisena. Toteutus valitsee yhden tavan (esim. erillinen
+`recalcPlayerFromDeals` joka ajetaan samassa kohdassa kuin `recalcPlayerFromDailyStats`).
 
 ### 4.2 db.js — uusi deals-rajapinta
 
