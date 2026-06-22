@@ -1216,23 +1216,34 @@ function TweaksUI({ t, setTweak, onResetAll, isAdmin }) {
 
 // ── DailyReport ───────────────────────────
 
-function DealEntry({ deals, onAdd, onDelete, isToday }) {
+function DealEntry({ deals, onAdd, onDelete }) {
+  const today = localDateKey(new Date());
   const [open, setOpen] = useState(false);
   const [toimiala, setToimiala] = useState('');
   const [megis, setMegis] = useState('');
   const [eurot, setEurot] = useState('');
+  const [firstMeetingDate, setFirstMeetingDate] = useState('');
+  const [signedDate, setSignedDate] = useState(today);
+  const [meetingCount, setMeetingCount] = useState('');
 
+  const reset = () => {
+    setToimiala(''); setMegis(''); setEurot('');
+    setFirstMeetingDate(''); setSignedDate(today); setMeetingCount('');
+  };
   const submit = () => {
     if (!megis && !eurot && !toimiala.trim()) return;
-    onAdd({ toimiala, megis, eurot });
-    setToimiala(''); setMegis(''); setEurot(''); setOpen(false);
+    onAdd({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount });
+    reset(); setOpen(false);
   };
+
+  const sorted = [...deals].sort((a, b) =>
+    (b.signed_date || b.date_key || '').localeCompare(a.signed_date || a.date_key || ''));
 
   return (
     <div className="deal-entry">
       <div className="deal-entry-head">
         <span className="deal-entry-title">KAUPAT</span>
-        {isToday && !open && (
+        {!open && (
           <button className="deal-add-btn" onClick={() => setOpen(true)}>➕ Lisää kauppa</button>
         )}
       </div>
@@ -1246,27 +1257,47 @@ function DealEntry({ deals, onAdd, onDelete, isToday }) {
                    value={megis} onChange={e => setMegis(e.target.value)} />
             <input className="deal-input" type="number" min="0" placeholder="Eurot"
                    value={eurot} onChange={e => setEurot(e.target.value)} />
+            <input className="deal-input" type="number" min="0" placeholder="Tapaamisia"
+                   value={meetingCount} onChange={e => setMeetingCount(e.target.value)} />
+          </div>
+          <div className="deal-form-dates">
+            <label className="deal-date-field">
+              <span>1. tapaaminen</span>
+              <input className="deal-input" type="date" value={firstMeetingDate}
+                     onChange={e => setFirstMeetingDate(e.target.value)} />
+            </label>
+            <label className="deal-date-field">
+              <span>Allekirjoitettu</span>
+              <input className="deal-input" type="date" value={signedDate}
+                     onChange={e => setSignedDate(e.target.value)} />
+            </label>
           </div>
           <div className="deal-form-actions">
             <button className="deal-save" onClick={submit}>Tallenna kauppa</button>
-            <button className="deal-cancel" onClick={() => setOpen(false)}>Peruuta</button>
+            <button className="deal-cancel" onClick={() => { reset(); setOpen(false); }}>Peruuta</button>
           </div>
         </div>
       )}
 
-      {deals.length > 0 ? (
+      {sorted.length > 0 ? (
         <ul className="deal-list">
-          {deals.map(d => (
-            <li key={d.id} className="deal-row">
-              <span className="deal-toimiala">{d.toimiala || '—'}</span>
-              <span className="deal-megis">{d.megis} Megis</span>
-              <span className="deal-eur">{Math.round(d.eurot)} €</span>
-              {isToday && <button className="deal-del" title="Poista kauppa" onClick={() => onDelete(d.id)}>✕</button>}
-            </li>
-          ))}
+          {sorted.map(d => {
+            const lt = dealLeadTimeDays(d);
+            return (
+              <li key={d.id} className="deal-row">
+                <span className="deal-toimiala">{d.toimiala || '—'}</span>
+                <span className="deal-megis">{d.megis} Megis</span>
+                <span className="deal-eur">{Math.round(d.eurot)} €</span>
+                <span className="deal-lead" title="Kaupan kesto">{lt != null ? lt + ' pv' : '—'}</span>
+                <span className="deal-meet" title="Tapaamisia">{Number(d.meeting_count) > 0 ? d.meeting_count + ' tap.' : '—'}</span>
+                <span className="deal-date" title="Allekirjoitettu">{d.signed_date || d.date_key || ''}</span>
+                <button className="deal-del" title="Poista kauppa" onClick={() => onDelete(d.id)}>✕</button>
+              </li>
+            );
+          })}
         </ul>
       ) : (
-        <div className="deal-empty">Ei kauppoja tälle päivälle.</div>
+        <div className="deal-empty">Ei kauppoja vielä.</div>
       )}
     </div>
   );
@@ -1432,13 +1463,12 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
         </div>
       )}
 
-      {/* Kaupat — vain pelaajanäkymä, valitulle päivälle */}
+      {/* Kaupat — vain pelaajanäkymä, kaikki omat kaupat allekirjoituspäivän mukaan */}
       {!isAdmin && (
         <DealEntry
-          deals={(deals || []).filter(d => d.player_id === currentKey && d.date_key === dateKey)}
+          deals={(deals || []).filter(d => d.player_id === currentKey)}
           onAdd={onAddDeal}
           onDelete={onDeleteDeal}
-          isToday={selIdx === todayIdx}
         />
       )}
 
@@ -1978,7 +2008,7 @@ function App() {
     setTimeout(() => setFlashKey(null), 900);
 
     if (rect) {
-      const fId = `f-${Date.now()}`;
+      const fId = `f-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       setFloats((f) => [...f, { id: fId, x: rect.left + rect.width / 2 - 12, y: rect.top - 4, minus }]);
       setTimeout(() => setFloats((f) => f.filter(x => x.id !== fId)), 1300);
     }
@@ -2000,19 +2030,21 @@ function App() {
   }, [currentKey, playersMap, t.confetti]);
 
   // Tallenna päiväraportti-rivi ja päivitä pelaajan kokonaistilasto
-  const handleAddDeal = useCallback(async ({ toimiala, megis, eurot }) => {
+  const handleAddDeal = useCallback(async ({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount }) => {
     if (!currentKey || currentKey === ADMIN_KEY) return;
-    const dayIdx = currentWeekdayIndex();
-    const safeIdx = dayIdx >= 0 ? Math.min(dayIdx, WEEKDAY_DATE_KEYS.length - 1) : 0;
-    const dateKey = weekdayIndexToDateKey(safeIdx);
-    const todays = dealsRef.current.filter(d => d.player_id === currentKey && d.date_key === dateKey);
-    const seq = todays.length + 1;
+    // Kauppa ankkuroidaan allekirjoituspäivään (oletus: tänään)
+    const dateKey = (signedDate && signedDate.trim()) ? signedDate.trim() : localDateKey(new Date());
+    const sameDay = dealsRef.current.filter(d => d.player_id === currentKey && d.date_key === dateKey);
+    const seq = sameDay.length + 1;
     const id = `${currentKey}_${dateKey}_${seq}`;
     const deal = {
       id, player_id: currentKey, date_key: dateKey,
       toimiala: (toimiala || '').trim(),
       megis: Math.max(0, Number(megis) || 0),
       eurot: Math.max(0, Number(eurot) || 0),
+      first_meeting_date: (firstMeetingDate && firstMeetingDate.trim()) ? firstMeetingDate.trim() : null,
+      signed_date: dateKey,
+      meeting_count: Math.max(0, Math.floor(Number(meetingCount) || 0)),
       created_at: new Date().toISOString(),
     };
     await DB.upsertDeal(deal);
