@@ -10,7 +10,10 @@
 
 Buukkauskisa-sovellus (React UMD/CDN + Babel standalone, ei build-vaihetta;
 Supabase + RLS + Realtime; Vercel-hosting) muutetaan kilpailusta pysyväksi
-myynnin seurantanäytöksi. Tämä osaprojekti laajentaa datamallia kahdella tavalla:
+**myynnin dashboard -sivuksi**. Tuote ei ole enää kertaluontoinen kisa vaan
+jatkuva myynnin seurantanäyttö, johon tuodaan gamification (osaprojekti D) ja
+**kuukausittaiset sarjataulukot** (osaprojekti C). Tämä osaprojekti (A) laajentaa
+datamallia kahdella tavalla:
 
 1. **Uudet KPI:t myyntiputkeen** — lisätään *tapaamiset* nykyisten mittareiden rinnalle.
 2. **Kauppojen kirjaus** — jokainen toteutunut kauppa tallennetaan omana rivinään
@@ -220,8 +223,12 @@ sarakkeina/korteissa, mutta eivät vaikuta sijoituksiin tässä vaiheessa.
 |---|---|
 | Pisteytyksen muutos (Megis/€ vaikuttaa sijoituksiin) | Myöhemmin |
 | Käyttäjäkohtaiset salasanat / auth-koventaminen / RLS-kiristys | B |
-| Aikajaksosuodatus, kausihistorian selailu-UI | C |
+| Aikajaksosuodatus, **kuukausittaiset sarjataulukot**, kausihistorian selailu-UI | C |
 | Tiimitavoitteet, badget, H2H, Hall of Fame | D |
+
+> Datamalli (A) tukee kuukausittaisia sarjataulukoita sellaisenaan: `daily_stats.date_key`
+> ja `deals.date_key` mahdollistavat minkä tahansa aikavälin aggregoinnin client-puolella.
+> Itse kuukausinäkymä ja sen pisteytys/järjestys toteutetaan osaprojektissa C.
 
 ---
 
