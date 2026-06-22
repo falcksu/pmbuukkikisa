@@ -359,7 +359,7 @@ function MyCard({ me, onAction }) {
       </div>
       <div className="mc-stats">
         <div className="stat">
-          <div className="lbl">Luurit</div>
+          <div className="lbl">Lähteneet</div>
           <div className="v">{me.luurit}</div>
         </div>
         <div className="stat">
@@ -382,10 +382,26 @@ function MyCard({ me, onAction }) {
           <div className="lbl">Pisteet</div>
           <div className="v" style={{ color: 'var(--accent)' }}>{me.buukit}</div>
         </div>
+        <div className="stat">
+          <div className="lbl">Tapaamiset</div>
+          <div className="v">{me.tapaamiset || 0}</div>
+        </div>
+        <div className="stat">
+          <div className="lbl">Kaupat</div>
+          <div className="v">{me.dealsCount || 0}</div>
+        </div>
+        <div className="stat">
+          <div className="lbl">Ø kauppa</div>
+          <div className="v">{Math.round(me.avgMegis || 0)}<span style={{ fontSize: 12, color: 'var(--ink-3)' }}> Megis</span></div>
+        </div>
+        <div className="stat">
+          <div className="lbl">Megis yht.</div>
+          <div className="v">{Math.round(me.megisTotal || 0)}</div>
+        </div>
       </div>
       <div className="mc-actions">
         <button className="btn" onClick={(e) => onAction('luuri', e.currentTarget.getBoundingClientRect())}>
-          <span className="ico">+</span> LUURIN NOSTO
+          <span className="ico">+</span> LÄHTENYT PUHELU
         </button>
         <button
           className="btn"
@@ -474,7 +490,7 @@ function Row({ p, onClick, flash, isMe, hasEnoughForPlayoff, isAdmin, onDelete, 
       </div>
       <div className="stat-cell col-luurit">
         <div className="v">{p.luurit}</div>
-        <div className="pct">LUURIN NOSTO</div>
+        <div className="pct">LÄHTENEET</div>
       </div>
       <div className="stat-cell col-vastatut">
         <div className="v">{p.vastatut}</div>
@@ -529,7 +545,7 @@ function Table({ sorted, onSelect, flashKey, meKey, isAdmin, onDelete, sakkoKey,
       <div className="table-head">
         <div className="num">SIJA</div>
         <div>PELAAJA</div>
-        <div className="num">LUURIN NOSTO</div>
+        <div className="num">LÄHTENEET</div>
         <div className="num">VASTATUT</div>
         <div className="num">BUUKIT · PTS</div>
         <div className="ctr">PUTKI</div>
@@ -972,7 +988,7 @@ function AdminPanel({ players, onDelete, onResetAll }) {
           <div className="v">{players.length}</div>
         </div>
         <div className="stat">
-          <div className="lbl">Luurit (yht.)</div>
+          <div className="lbl">Lähteneet (yht.)</div>
           <div className="v">{totalLuurit}</div>
         </div>
         <div className="stat">
@@ -1038,7 +1054,7 @@ function PlayerModal({ player, onClose, onAction, isMe, isAdmin, onDelete }) {
         </div>
         <div className="m-stats">
           <div className="cell">
-            <div className="label">Luurit</div>
+            <div className="label">Lähteneet</div>
             <div className="val">{player.luurit}</div>
           </div>
           <div className="cell">
@@ -1054,6 +1070,15 @@ function PlayerModal({ player, onClose, onAction, isMe, isAdmin, onDelete }) {
           <div className="cell">
             <div className="label">Putki</div>
             <div className="val">{player.streak}<span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'JetBrains Mono, monospace', marginLeft: 4 }}>pv</span></div>
+          </div>
+          <div className="cell">
+            <div className="label">Tapaamiset</div>
+            <div className="val">{player.tapaamiset || 0}</div>
+          </div>
+          <div className="cell">
+            <div className="label">Kaupat</div>
+            <div className="val">{player.dealsCount || 0}</div>
+            <div className="sub">Ø {Math.round(player.avgMegis || 0)} MEGIS</div>
           </div>
           <div className="cell">
             <div className="label">{player.inPlayoff ? 'Ero 9. sijaan' : 'Ero playoffeihin'}</div>
@@ -1080,7 +1105,7 @@ function PlayerModal({ player, onClose, onAction, isMe, isAdmin, onDelete }) {
         {isMe ? (
           <div className="m-foot">
             <button className="alt" onClick={onClose}>SULJE</button>
-            <button onClick={() => { onAction('luuri'); onClose(); }}>+ LUURIN NOSTO</button>
+            <button onClick={() => { onAction('luuri'); onClose(); }}>+ LÄHTENYT PUHELU</button>
             <button onClick={() => { onAction('vastattu'); onClose(); }} disabled={player.vastatut >= player.luurit}>+ VASTATTU</button>
             <button onClick={() => { onAction('buukki'); onClose(); }} disabled={player.buukit >= player.vastatut}>+ BUUKKI</button>
             <button className="danger" onClick={() => { onAction('-buukki'); onClose(); }} disabled={player.buukit <= 0}>− BUUKKI</button>
@@ -1422,7 +1447,7 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
         <div className="dr-summary">
           <div className="dr-sum-title">OMA YHTEENVETO</div>
           <table className="dr-sum-table">
-            <thead><tr><th>Päivä</th><th>Luurit</th><th>Vastatut</th><th>Buukit</th><th>Vast%</th><th>Buuk%</th></tr></thead>
+            <thead><tr><th>Päivä</th><th>Lähteneet</th><th>Vastatut</th><th>Buukit</th><th>Vast%</th><th>Buuk%</th></tr></thead>
             <tbody>
               {days.map((d, i) => {
                 const dk = weekdayIndexToDateKey(i);
