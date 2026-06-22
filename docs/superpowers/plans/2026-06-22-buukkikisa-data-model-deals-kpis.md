@@ -638,7 +638,12 @@ function DealEntry({ deals, onAdd, onDelete, isToday }) {
 
 - [ ] **Step 4: Välitä uudet propsit DailyReportille**
 
-Etsi `DailyReport`-kutsukohdat (`<DailyReport ... />`). Lisää propsit:
+Lisää ensin propsit `DailyReport`-funktion destrukturointiin (nykyinen:
+`function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay })`):
+```js
+function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deals, onAddDeal, onDeleteDeal }) {
+```
+Etsi sitten `DailyReport`-kutsukohdat (`<DailyReport ... />`). Lisää propsit:
 ```jsx
             deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal}
 ```
