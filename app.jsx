@@ -1493,6 +1493,7 @@ function App() {
   const excludedKeysRef = useRef(new Set());
   useEffect(() => { excludedKeysRef.current = excludedKeys; }, [excludedKeys]);
   const [dailyStats, setDailyStats] = useState([]);
+  const [deals, setDeals] = useState([]);
   const [activeTab, setActiveTab] = useState('leaderboard');
 
   // DB init + realtime subscribe
@@ -1500,33 +1501,40 @@ function App() {
   const playoffRef    = useRef(EMPTY_PLAYOFF);
   const playoutRef    = useRef(EMPTY_PLAYOUT);
   const dailyRef      = useRef([]);
+  const dealsRef      = useRef([]);
 
-  function applyDailyToPlayers(rawMap, rows) {
+  function applyDerivedToPlayers(rawMap, rows, dealRows) {
     const out = {};
     Object.entries(rawMap).forEach(([key, p]) => {
-      const myRows = rows.filter(r => r.player_id === key);
-      out[key] = myRows.length > 0 ? recalcPlayerFromDailyStats(p, myRows) : p;
+      const myRows  = rows.filter(r => r.player_id === key);
+      const myDeals = dealRows.filter(d => d.player_id === key);
+      let np = myRows.length > 0 ? recalcPlayerFromDailyStats(p, myRows) : p;
+      np = recalcPlayerFromDeals(np, myDeals);
+      out[key] = np;
     });
     return out;
   }
 
   useEffect(() => {
-    let unsubP, unsubPO, unsubPout, unsubD;
+    let unsubP, unsubPO, unsubPout, unsubD, unsubDeals;
     (async () => {
       const initial = await DB.init();
       const rawPlayers = initial.players || {};
       const dailyRows  = initial.daily   || [];
+      const dealRows   = initial.deals   || [];
       const po         = migratePlayoff(initial.playoff || EMPTY_PLAYOFF);
       const pout       = initial.playout || EMPTY_PLAYOUT;
 
-      // daily_stats is the source of truth — always recalc totals from it
-      const players = applyDailyToPlayers(rawPlayers, dailyRows);
+      // daily_stats + deals ovat totuuden lähde — aggregaatit lasketaan niistä
+      const players = applyDerivedToPlayers(rawPlayers, dailyRows, dealRows);
 
       dailyRef.current      = dailyRows;
+      dealsRef.current      = dealRows;
       playersMapRef.current = players;
       playoffRef.current    = po;
       playoutRef.current    = pout;
       setDailyStats(dailyRows);
+      setDeals(dealRows);
       setPlayersMap(players);
       setPlayoff(po);
       setPlayout(pout);
@@ -1536,7 +1544,7 @@ function App() {
       Object.values(players).forEach(p => DB.upsertPlayer(p));
 
       unsubP = DB.subscribe((freshMap) => {
-        const recalced = applyDailyToPlayers(freshMap, dailyRef.current);
+        const recalced = applyDerivedToPlayers(freshMap, dailyRef.current, dealsRef.current);
         playersMapRef.current = recalced;
         setPlayersMap(recalced);
       });
@@ -1553,7 +1561,14 @@ function App() {
       unsubD = DB.subscribeDaily((rows) => {
         dailyRef.current = rows;
         setDailyStats(rows);
-        const recalced = applyDailyToPlayers(playersMapRef.current, rows);
+        const recalced = applyDerivedToPlayers(playersMapRef.current, rows, dealsRef.current);
+        playersMapRef.current = recalced;
+        setPlayersMap(recalced);
+      });
+      unsubDeals = DB.subscribeDeals((rows) => {
+        dealsRef.current = rows;
+        setDeals(rows);
+        const recalced = applyDerivedToPlayers(playersMapRef.current, dailyRef.current, rows);
         playersMapRef.current = recalced;
         setPlayersMap(recalced);
       });
@@ -1563,6 +1578,7 @@ function App() {
       if (unsubPO) unsubPO();
       if (unsubPout) unsubPout();
       if (unsubD) unsubD();
+      if (unsubDeals) unsubDeals();
     };
   }, []);
 
