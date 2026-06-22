@@ -398,6 +398,14 @@ function MyCard({ me, onAction }) {
           <div className="lbl">Megis yht.</div>
           <div className="v">{Math.round(me.megisTotal || 0)}</div>
         </div>
+        <div className="stat">
+          <div className="lbl">Ø kaupan kesto</div>
+          <div className="v">{Math.round(me.avgLeadDays || 0)}<span style={{ fontSize: 12, color: 'var(--ink-3)' }}> pv</span></div>
+        </div>
+        <div className="stat">
+          <div className="lbl">Ø tapaamisia/kauppa</div>
+          <div className="v">{(me.avgMeetings || 0).toFixed(1)}</div>
+        </div>
       </div>
       <div className="mc-actions">
         <button className="btn" onClick={(e) => onAction('luuri', e.currentTarget.getBoundingClientRect())}>
@@ -1079,6 +1087,11 @@ function PlayerModal({ player, onClose, onAction, isMe, isAdmin, onDelete }) {
             <div className="label">Kaupat</div>
             <div className="val">{player.dealsCount || 0}</div>
             <div className="sub">Ø {Math.round(player.avgMegis || 0)} MEGIS</div>
+          </div>
+          <div className="cell">
+            <div className="label">Ø kaupan kesto</div>
+            <div className="val">{Math.round(player.avgLeadDays || 0)}<span style={{ fontSize: 12, color: 'var(--ink-3)' }}> pv</span></div>
+            <div className="sub">Ø {(player.avgMeetings || 0).toFixed(1)} TAP./KAUPPA</div>
           </div>
           <div className="cell">
             <div className="label">{player.inPlayoff ? 'Ero 9. sijaan' : 'Ero playoffeihin'}</div>

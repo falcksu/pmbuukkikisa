@@ -2414,14 +2414,23 @@ body { font-size: 14px; }
 .deal-form { display: flex; flex-direction: column; gap: 8px; background: var(--bg-2); border: 1px solid var(--line); padding: 12px; margin-bottom: 12px; }
 .deal-form-nums { display: flex; gap: 8px; }
 .deal-input { padding: 8px 10px; border: 1px solid var(--line); background: #fff; font-size: 14px; width: 100%; }
+.deal-form-dates { display: flex; gap: 8px; }
+.deal-date-field { display: flex; flex-direction: column; gap: 3px; flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .04em; color: var(--ink-3); text-transform: uppercase; }
 .deal-form-actions { display: flex; gap: 8px; }
 .deal-save { flex: 1; padding: 8px; background: var(--green, #1a8a3e); color: #fff; border: none; font-weight: 700; cursor: pointer; }
 .deal-cancel { padding: 8px 12px; background: var(--bg-3); border: 1px solid var(--line); cursor: pointer; }
 .deal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.deal-row { display: grid; grid-template-columns: 1fr auto auto 24px; align-items: center; gap: 8px; padding: 7px 8px; background: var(--bg-2); border: 1px solid var(--line); font-size: 13px; }
+.deal-row { display: grid; grid-template-columns: minmax(0,1.4fr) auto auto auto auto auto 24px; align-items: center; gap: 10px; padding: 7px 8px; background: var(--bg-2); border: 1px solid var(--line); font-size: 13px; }
 .deal-toimiala { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.deal-megis { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-weight: 700; }
-.deal-eur { font-family: 'JetBrains Mono', monospace; color: var(--ink-3); }
+.deal-megis { font-family: 'JetBrains Mono', monospace; color: var(--accent); font-weight: 700; white-space: nowrap; }
+.deal-eur { font-family: 'JetBrains Mono', monospace; color: var(--ink-3); white-space: nowrap; }
+.deal-lead { font-family: 'JetBrains Mono', monospace; color: var(--ink-2); white-space: nowrap; }
+.deal-meet { font-family: 'JetBrains Mono', monospace; color: var(--ink-3); white-space: nowrap; }
+.deal-date { font-family: 'JetBrains Mono', monospace; color: var(--ink-4); font-size: 11px; white-space: nowrap; }
 .deal-del { width: 22px; height: 22px; border: none; background: transparent; color: var(--ink-3); cursor: pointer; font-size: 14px; }
 .deal-del:hover { color: var(--red); }
 .deal-empty { font-size: 13px; color: var(--ink-4); font-style: italic; }
+@media (max-width: 600px) {
+  .deal-row { grid-template-columns: 1fr auto auto; row-gap: 2px; }
+  .deal-lead, .deal-meet, .deal-date { font-size: 11px; }
+}
