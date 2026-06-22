@@ -807,16 +807,24 @@ git push
 -- 1) Uusi sarake daily_stats-tauluun
 ALTER TABLE daily_stats ADD COLUMN IF NOT EXISTS tapaamiset int NOT NULL DEFAULT 0;
 
--- 2) Uusi deals-taulu
+-- 2) Uusi deals-taulu (sis. lead time -laajennus: first_meeting_date, signed_date, meeting_count)
+--    date_key = signed_date (kauppa lasketaan allekirjoituspäivän jaksolle)
 CREATE TABLE IF NOT EXISTS deals (
-  id          text PRIMARY KEY,
-  player_id   text NOT NULL,
-  date_key    date NOT NULL,
-  toimiala    text,
-  megis       numeric NOT NULL DEFAULT 0,
-  eurot       numeric NOT NULL DEFAULT 0,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id                 text PRIMARY KEY,
+  player_id          text NOT NULL,
+  date_key           date NOT NULL,
+  toimiala           text,
+  megis              numeric NOT NULL DEFAULT 0,
+  eurot              numeric NOT NULL DEFAULT 0,
+  first_meeting_date date,
+  signed_date        date,
+  meeting_count      int NOT NULL DEFAULT 0,
+  created_at         timestamptz NOT NULL DEFAULT now()
 );
+-- Jos deals-taulu on jo luotu ilman näitä, aja:
+-- ALTER TABLE deals ADD COLUMN IF NOT EXISTS first_meeting_date date;
+-- ALTER TABLE deals ADD COLUMN IF NOT EXISTS signed_date date;
+-- ALTER TABLE deals ADD COLUMN IF NOT EXISTS meeting_count int NOT NULL DEFAULT 0;
 
 -- 3) RLS samaksi kuin muilla tauluilla (anon luku/kirjoitus).
 --    Toista deals-taululle samat politiikat kuin daily_stats-taululla.
