@@ -1832,6 +1832,9 @@ function App() {
         }
         next.trendN = Math.min(cur.trendN, 0) - 1;
         resultingNote = 'BUUKKI PERUTTU';
+      } else if (kind === 'tapaaminen') {
+        next.tapaamiset = (cur.tapaamiset || 0) + 1;
+        resultingNote = `TAPAAMINEN #${next.tapaamiset}`;
       }
 
       // Detect playoff crossing
@@ -1855,16 +1858,17 @@ function App() {
     // Also update daily_stats for today (fire-and-forget)
     const dayIdx2 = currentWeekdayIndex();
     const dateKey2 = weekdayIndexToDateKey(dayIdx2);
-    if (dateKey2 && dayIdx2 >= 0 && (kind === 'luuri' || kind === 'vastattu' || kind === 'buukki' || kind === '-buukki')) {
+    if (dateKey2 && dayIdx2 >= 0 && (kind === 'luuri' || kind === 'vastattu' || kind === 'buukki' || kind === '-buukki' || kind === 'tapaaminen')) {
       setDailyStats(prev => {
         const existing = prev.find(r => r.player_id === currentKey && r.date_key === dateKey2);
         const ds = existing
-          ? { luurit: existing.luurit, vastatut: existing.vastatut, buukit: existing.buukit }
-          : { luurit: 0, vastatut: 0, buukit: 0 };
+          ? { luurit: existing.luurit, vastatut: existing.vastatut, buukit: existing.buukit, tapaamiset: existing.tapaamiset || 0 }
+          : { luurit: 0, vastatut: 0, buukit: 0, tapaamiset: 0 };
         if (kind === 'luuri')     ds.luurit++;
         else if (kind === 'vastattu') ds.vastatut++;
         else if (kind === 'buukki')   ds.buukit++;
         else if (kind === '-buukki')  ds.buukit = Math.max(0, ds.buukit - 1);
+        else if (kind === 'tapaaminen') ds.tapaamiset++;
         const updated = { id: currentKey+'_'+dateKey2, player_id: currentKey, date_key: dateKey2, ...ds };
         DB.upsertDailyStats(currentKey, dateKey2, ds);
         return [...prev.filter(r => !(r.player_id === currentKey && r.date_key === dateKey2)), updated];
@@ -1897,6 +1901,47 @@ function App() {
   }, [currentKey, playersMap, t.confetti]);
 
   // Tallenna päiväraportti-rivi ja päivitä pelaajan kokonaistilasto
+  const handleAddDeal = useCallback(async ({ toimiala, megis, eurot }) => {
+    if (!currentKey || currentKey === ADMIN_KEY) return;
+    const dayIdx = currentWeekdayIndex();
+    const safeIdx = dayIdx >= 0 ? Math.min(dayIdx, WEEKDAY_DATE_KEYS.length - 1) : 0;
+    const dateKey = weekdayIndexToDateKey(safeIdx);
+    const todays = dealsRef.current.filter(d => d.player_id === currentKey && d.date_key === dateKey);
+    const seq = todays.length + 1;
+    const id = `${currentKey}_${dateKey}_${seq}`;
+    const deal = {
+      id, player_id: currentKey, date_key: dateKey,
+      toimiala: (toimiala || '').trim(),
+      megis: Math.max(0, Number(megis) || 0),
+      eurot: Math.max(0, Number(eurot) || 0),
+      created_at: new Date().toISOString(),
+    };
+    await DB.upsertDeal(deal);
+    const nextDeals = [...dealsRef.current.filter(d => d.id !== id), deal];
+    dealsRef.current = nextDeals;
+    setDeals(nextDeals);
+    const base = playersMapRef.current[currentKey];
+    if (base) {
+      const recalced = recalcPlayerFromDeals(base, nextDeals.filter(d => d.player_id === currentKey));
+      playersMapRef.current = { ...playersMapRef.current, [currentKey]: recalced };
+      setPlayersMap(prev => ({ ...prev, [currentKey]: recalced }));
+    }
+  }, [currentKey]);
+
+  const handleDeleteDeal = useCallback(async (id) => {
+    if (!currentKey || currentKey === ADMIN_KEY) return;
+    await DB.deleteDeal(id);
+    const nextDeals = dealsRef.current.filter(d => d.id !== id);
+    dealsRef.current = nextDeals;
+    setDeals(nextDeals);
+    const base = playersMapRef.current[currentKey];
+    if (base) {
+      const recalced = recalcPlayerFromDeals(base, nextDeals.filter(d => d.player_id === currentKey));
+      playersMapRef.current = { ...playersMapRef.current, [currentKey]: recalced };
+      setPlayersMap(prev => ({ ...prev, [currentKey]: recalced }));
+    }
+  }, [currentKey]);
+
   const handleSaveDay = useCallback(async (dateKey, stats) => {
     if (!currentKey || currentKey === ADMIN_KEY) return;
     await DB.upsertDailyStats(currentKey, dateKey, stats);
