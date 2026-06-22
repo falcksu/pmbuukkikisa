@@ -21,6 +21,25 @@ const w = load('data.jsx').window;
   const p = w.recalcPlayerFromDeals({}, []);
   assert(p.dealsCount === 0 && p.avgMegis === 0 && p.avgEur === 0, 'nolla kauppaa → 0');
 }
+// lead time -laskenta
+{
+  assert(w.dealLeadTimeDays({ first_meeting_date:'2026-06-01', signed_date:'2026-06-15' }) === 14, 'lead time = 14 pv');
+  assert(w.dealLeadTimeDays({ first_meeting_date:'2026-06-10', signed_date:'2026-06-10' }) === 0, 'sama päivä = 0 pv');
+  assert(w.dealLeadTimeDays({ signed_date:'2026-06-15' }) === null, 'puuttuva first meeting → null');
+  assert(w.dealLeadTimeDays({ first_meeting_date:'2026-06-20', signed_date:'2026-06-10' }) === null, 'negatiivinen → null');
+}
+// recalcPlayerFromDeals: avgLeadDays + avgMeetings
+{
+  const deals = [
+    { player_id:'a', megis:10, eurot:1000, first_meeting_date:'2026-06-01', signed_date:'2026-06-11', meeting_count:3 },
+    { player_id:'a', megis:30, eurot:3000, first_meeting_date:'2026-06-01', signed_date:'2026-06-21', meeting_count:5 },
+    { player_id:'a', megis:5,  eurot:500 }, // ei pvm/tapaamisia → ei mukaan keskiarvoihin
+  ];
+  const p = w.recalcPlayerFromDeals({}, deals);
+  assert(p.dealsCount === 3, 'dealsCount = 3');
+  assert(p.avgLeadDays === 15, 'avgLeadDays = (10+20)/2 = 15');
+  assert(p.avgMeetings === 4, 'avgMeetings = (3+5)/2 = 4');
+}
 // tapaamiset summautuu daily-riveistä
 {
   const rows = [

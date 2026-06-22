@@ -281,14 +281,35 @@ function recalcPlayerFromDailyStats(player, myRows) {
   return { ...player, luurit, vastatut, buukit, tapaamiset, last5, streak, trendN };
 }
 
+// Kaupan kesto (lead time) päivinä: allekirjoitus − ensimmäinen tapaaminen.
+// null jos jompikumpi pvm puuttuu tai tulos olisi negatiivinen.
+function dealLeadTimeDays(deal) {
+  if (!deal || !deal.first_meeting_date || !deal.signed_date) return null;
+  const a = new Date(deal.first_meeting_date + 'T00:00:00');
+  const b = new Date(deal.signed_date + 'T00:00:00');
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return null;
+  const days = Math.round((b - a) / 86400000);
+  return days >= 0 ? days : null;
+}
+
 // Laskee pelaajan kauppa-aggregaatit kauppariveistä (deals = totuuden lähde)
 function recalcPlayerFromDeals(player, myDeals) {
   let megisTotal = 0, eurTotal = 0;
+  let leadSum = 0, leadN = 0, meetSum = 0, meetN = 0;
   const dealsCount = myDeals.length;
-  myDeals.forEach(d => { megisTotal += Number(d.megis) || 0; eurTotal += Number(d.eurot) || 0; });
+  myDeals.forEach(d => {
+    megisTotal += Number(d.megis) || 0;
+    eurTotal   += Number(d.eurot) || 0;
+    const lt = dealLeadTimeDays(d);
+    if (lt != null) { leadSum += lt; leadN++; }
+    const mc = Number(d.meeting_count) || 0;
+    if (mc > 0) { meetSum += mc; meetN++; }
+  });
   const avgMegis = dealsCount > 0 ? megisTotal / dealsCount : 0;
   const avgEur   = dealsCount > 0 ? eurTotal / dealsCount : 0;
-  return { ...player, dealsCount, megisTotal, eurTotal, avgMegis, avgEur };
+  const avgLeadDays = leadN > 0 ? leadSum / leadN : 0;
+  const avgMeetings = meetN > 0 ? meetSum / meetN : 0;
+  return { ...player, dealsCount, megisTotal, eurTotal, avgMegis, avgEur, avgLeadDays, avgMeetings };
 }
 
 // ── Playout (pelaajat jotka jäivät runkosarjasta) ────────────────────────────
@@ -330,6 +351,6 @@ Object.assign(window, {
   competitionPhase,
   EMPTY_PLAYOFF, MATCH_ORDER,
   setMatchWinner, clearMatchWinner, startPlayoffs, resetPlayoffs, recomputeAdvancement, migratePlayoff,
-  WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats, recalcPlayerFromDeals,
+  WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats, recalcPlayerFromDeals, dealLeadTimeDays,
   EMPTY_PLAYOUT, startPlayout, setSakko, clearSakko, resetPlayout,
 });
