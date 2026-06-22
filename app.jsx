@@ -404,6 +404,13 @@ function MyCard({ me, onAction }) {
           <span className="ico">+</span> BUUKKI
         </button>
         <button
+          className="btn"
+          onClick={(e) => onAction('tapaaminen', e.currentTarget.getBoundingClientRect())}
+          title="Kirjaa tapaaminen"
+        >
+          <span className="ico">+</span> TAPAAMINEN
+        </button>
+        <button
           className="btn danger"
           onClick={(e) => onAction('-buukki', e.currentTarget.getBoundingClientRect())}
           disabled={me.buukit <= 0}
@@ -1184,7 +1191,63 @@ function TweaksUI({ t, setTweak, onResetAll, isAdmin }) {
 
 // ── DailyReport ───────────────────────────
 
-function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
+function DealEntry({ deals, onAdd, onDelete, isToday }) {
+  const [open, setOpen] = useState(false);
+  const [toimiala, setToimiala] = useState('');
+  const [megis, setMegis] = useState('');
+  const [eurot, setEurot] = useState('');
+
+  const submit = () => {
+    if (!megis && !eurot && !toimiala.trim()) return;
+    onAdd({ toimiala, megis, eurot });
+    setToimiala(''); setMegis(''); setEurot(''); setOpen(false);
+  };
+
+  return (
+    <div className="deal-entry">
+      <div className="deal-entry-head">
+        <span className="deal-entry-title">KAUPAT</span>
+        {isToday && !open && (
+          <button className="deal-add-btn" onClick={() => setOpen(true)}>➕ Lisää kauppa</button>
+        )}
+      </div>
+
+      {open && (
+        <div className="deal-form">
+          <input className="deal-input" type="text" placeholder="Toimiala (vain toimiala, ei asiakkaan nimeä)"
+                 value={toimiala} onChange={e => setToimiala(e.target.value)} />
+          <div className="deal-form-nums">
+            <input className="deal-input" type="number" min="0" placeholder="Megis"
+                   value={megis} onChange={e => setMegis(e.target.value)} />
+            <input className="deal-input" type="number" min="0" placeholder="Eurot"
+                   value={eurot} onChange={e => setEurot(e.target.value)} />
+          </div>
+          <div className="deal-form-actions">
+            <button className="deal-save" onClick={submit}>Tallenna kauppa</button>
+            <button className="deal-cancel" onClick={() => setOpen(false)}>Peruuta</button>
+          </div>
+        </div>
+      )}
+
+      {deals.length > 0 ? (
+        <ul className="deal-list">
+          {deals.map(d => (
+            <li key={d.id} className="deal-row">
+              <span className="deal-toimiala">{d.toimiala || '—'}</span>
+              <span className="deal-megis">{d.megis} Megis</span>
+              <span className="deal-eur">{Math.round(d.eurot)} €</span>
+              {isToday && <button className="deal-del" title="Poista kauppa" onClick={() => onDelete(d.id)}>✕</button>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="deal-empty">Ei kauppoja tälle päivälle.</div>
+      )}
+    </div>
+  );
+}
+
+function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deals, onAddDeal, onDeleteDeal }) {
   // Combine regular season + playoff days for the selector
   const allDays = [
     ...COMPETITION.weekdays.map((d, i) => ({ ...d, idx: i })),
@@ -1198,7 +1261,7 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
   const rawIdx = currentWeekdayIndex();
   const todayIdx = rawIdx >= 0 ? Math.min(rawIdx, WEEKDAY_DATE_KEYS.length - 1) : 0;
   const [selIdx, setSelIdx] = useState(todayIdx);
-  const [form, setForm] = useState({ luurit: 0, vastatut: 0, buukit: 0 });
+  const [form, setForm] = useState({ luurit: 0, vastatut: 0, buukit: 0, tapaamiset: 0 });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1211,7 +1274,7 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
   useEffect(() => {
     if (isAdmin) return;
     const row = dailyStats.find(r => r.player_id === currentKey && r.date_key === dateKey);
-    setForm(row ? { luurit: row.luurit||0, vastatut: row.vastatut||0, buukit: row.buukit||0 } : { luurit:0, vastatut:0, buukit:0 });
+    setForm(row ? { luurit: row.luurit||0, vastatut: row.vastatut||0, buukit: row.buukit||0, tapaamiset: row.tapaamiset||0 } : { luurit:0, vastatut:0, buukit:0, tapaamiset:0 });
   }, [selIdx, dailyStats, currentKey, dateKey, isAdmin]);
 
   const adj = (field, delta) => setForm(prev => {
@@ -1317,9 +1380,10 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
             {days[selIdx]?.wd} {days[selIdx]?.date} — SYÖTÄ TILASTOT
           </div>
           {[
-            { key: 'luurit',   label: 'LUURIN NOSTOT',  max: null },
+            { key: 'luurit',   label: 'LÄHTENEET PUHELUT', max: null },
             { key: 'vastatut', label: 'VASTATUT PUHELUT', max: form.luurit },
             { key: 'buukit',   label: 'BUUKIT',          max: form.vastatut },
+            { key: 'tapaamiset', label: 'TAPAAMISET',    max: null },
           ].map(({ key, label, max }) => (
             <div className="dr-row" key={key}>
               <div className="dr-label">{label}</div>
@@ -1341,6 +1405,16 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay }) {
           </button>
           <div className="dr-hint">Sama yhdistelmä korvaa aiemman syötön. Sarjataulukko päivittyy heti.</div>
         </div>
+      )}
+
+      {/* Kaupat — vain pelaajanäkymä, valitulle päivälle */}
+      {!isAdmin && (
+        <DealEntry
+          deals={(deals || []).filter(d => d.player_id === currentKey && d.date_key === dateKey)}
+          onAdd={onAddDeal}
+          onDelete={onDeleteDeal}
+          isToday={selIdx === todayIdx}
+        />
       )}
 
       {/* Own summary table for non-admin */}
@@ -1989,7 +2063,7 @@ function App() {
         <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
         <TabNav active={activeTab} onChange={setActiveTab} isAdmin />
         {activeTab === 'report' || activeTab === 'teamreport' ? (
-          <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sorted.filter(p => p.key !== ADMIN_KEY)} onSaveDay={handleSaveDay} />
+          <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sorted.filter(p => p.key !== ADMIN_KEY)} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
         ) : (
         <div className="main">
           <div>
@@ -2053,9 +2127,9 @@ function App() {
       <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
       <TabNav active={activeTab} onChange={setActiveTab} isAdmin={false} />
       {activeTab === 'teamreport' ? (
-        <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sortedPublic} onSaveDay={handleSaveDay} />
+        <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sortedPublic} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
       ) : activeTab === 'report' ? (
-        <DailyReport currentKey={currentKey} isAdmin={false} dailyStats={dailyStats} players={sorted} onSaveDay={handleSaveDay} />
+        <DailyReport currentKey={currentKey} isAdmin={false} dailyStats={dailyStats} players={sorted} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
       ) : (
       <div className="main">
         <div>
