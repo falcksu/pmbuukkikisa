@@ -232,6 +232,7 @@
       luurit:   Math.max(0, stats.luurit   || 0),
       vastatut: Math.max(0, stats.vastatut || 0),
       buukit:   Math.max(0, stats.buukit   || 0),
+      tapaamiset: Math.max(0, stats.tapaamiset || 0),
       updated_at: new Date().toISOString(),
     };
     if (client) {
@@ -247,12 +248,60 @@
     return row;
   }
 
+  // ── Deals (kaupat) ─────────────────────────
+  const LS_DEALS = 'buukkauskisa.deals.v1';
+  let dealsListeners = [];
+
+  function loadLocalDeals() {
+    try { const r = localStorage.getItem(LS_DEALS); return r ? JSON.parse(r) : []; } catch(e) { return []; }
+  }
+  function saveLocalDeals(rows) {
+    try { localStorage.setItem(LS_DEALS, JSON.stringify(rows)); } catch(e) {}
+  }
+  function notifyDeals(rows) {
+    dealsListeners.forEach(cb => { try { cb(rows); } catch(e) {} });
+  }
+  function subscribeDeals(cb) {
+    dealsListeners.push(cb);
+    return () => { dealsListeners = dealsListeners.filter(x => x !== cb); };
+  }
+  async function fetchAllDeals() {
+    if (!client) return loadLocalDeals();
+    const { data, error } = await client.from('deals').select('*');
+    if (error) { console.error('fetchAllDeals error:', error); return loadLocalDeals(); }
+    return data || [];
+  }
+  async function upsertDeal(deal) {
+    if (client) {
+      const { error } = await client.from('deals').upsert(deal);
+      if (error) console.error('upsertDeal error:', error);
+    } else {
+      let rows = loadLocalDeals();
+      const idx = rows.findIndex(r => r.id === deal.id);
+      if (idx >= 0) rows[idx] = deal; else rows.push(deal);
+      saveLocalDeals(rows);
+      notifyDeals(rows);
+    }
+    return deal;
+  }
+  async function deleteDeal(id) {
+    if (client) {
+      const { error } = await client.from('deals').delete().eq('id', id);
+      if (error) console.error('deleteDeal error:', error);
+    } else {
+      const rows = loadLocalDeals().filter(r => r.id !== id);
+      saveLocalDeals(rows);
+      notifyDeals(rows);
+    }
+  }
+
   // ── Init ─────────────────────────
   async function init() {
     const initialPlayers = await fetchAll();
     const initialPlayoff = await fetchPlayoff();
     const initialPlayout = await fetchPlayout();
     const initialDaily   = await fetchAllDailyStats();
+    const initialDeals   = await fetchAllDeals();
     if (client) {
       client
         .channel('public:players')
@@ -276,15 +325,22 @@
             { event: '*', schema: 'public', table: 'daily_stats' },
             async () => { const fresh = await fetchAllDailyStats(); notifyDaily(fresh); })
         .subscribe();
+      client
+        .channel('public:deals')
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'deals' },
+            async () => { const fresh = await fetchAllDeals(); notifyDeals(fresh); })
+        .subscribe();
     } else {
       window.addEventListener('storage', (e) => {
         if (e.key === LS_KEY)     notify(loadLocal());
         if (e.key === LS_PLAYOFF) notifyPlayoff(loadLocalPlayoff());
         if (e.key === LS_PLAYOUT) notifyPlayout(loadLocalPlayout());
         if (e.key === LS_DAILY)   notifyDaily(loadLocalDaily());
+        if (e.key === LS_DEALS)   notifyDeals(loadLocalDeals());
       });
     }
-    return { players: initialPlayers, playoff: initialPlayoff, playout: initialPlayout, daily: initialDaily };
+    return { players: initialPlayers, playoff: initialPlayoff, playout: initialPlayout, daily: initialDaily, deals: initialDeals };
   }
 
   window.DB = {
@@ -304,5 +360,9 @@
     subscribeDaily,
     fetchAllDailyStats,
     upsertDailyStats,
+    subscribeDeals,
+    fetchAllDeals,
+    upsertDeal,
+    deleteDeal,
   };
 })();
