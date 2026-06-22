@@ -256,8 +256,8 @@ function dateKeyToWeekdayIndex(key) { return WEEKDAY_DATE_KEYS.indexOf(key); }
 
 // Laskee pelaajan yhteistilastot päiväkohtaisista riveistä
 function recalcPlayerFromDailyStats(player, myRows) {
-  let luurit = 0, vastatut = 0, buukit = 0;
-  myRows.forEach(r => { luurit += (r.luurit||0); vastatut += (r.vastatut||0); buukit += (r.buukit||0); });
+  let luurit = 0, vastatut = 0, buukit = 0, tapaamiset = 0;
+  myRows.forEach(r => { luurit += (r.luurit||0); vastatut += (r.vastatut||0); buukit += (r.buukit||0); tapaamiset += (r.tapaamiset||0); });
 
   const dayIdx = Math.max(0, Math.min(9, currentWeekdayIndex() >= 0 ? currentWeekdayIndex() : 0));
   const weekOffset = dayIdx >= 5 ? 5 : 0;
@@ -278,7 +278,17 @@ function recalcPlayerFromDailyStats(player, myRows) {
   const yesterB = dayIdx > 0 ? (buuksByDay[dayIdx - 1] || 0) : 0;
   const trendN = todayB - yesterB;
 
-  return { ...player, luurit, vastatut, buukit, last5, streak, trendN };
+  return { ...player, luurit, vastatut, buukit, tapaamiset, last5, streak, trendN };
+}
+
+// Laskee pelaajan kauppa-aggregaatit kauppariveistä (deals = totuuden lähde)
+function recalcPlayerFromDeals(player, myDeals) {
+  let megisTotal = 0, eurTotal = 0;
+  const dealsCount = myDeals.length;
+  myDeals.forEach(d => { megisTotal += Number(d.megis) || 0; eurTotal += Number(d.eurot) || 0; });
+  const avgMegis = dealsCount > 0 ? megisTotal / dealsCount : 0;
+  const avgEur   = dealsCount > 0 ? eurTotal / dealsCount : 0;
+  return { ...player, dealsCount, megisTotal, eurTotal, avgMegis, avgEur };
 }
 
 // ── Playout (pelaajat jotka jäivät runkosarjasta) ────────────────────────────
@@ -320,6 +330,6 @@ Object.assign(window, {
   competitionPhase,
   EMPTY_PLAYOFF, MATCH_ORDER,
   setMatchWinner, clearMatchWinner, startPlayoffs, resetPlayoffs, recomputeAdvancement, migratePlayoff,
-  WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats,
+  WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats, recalcPlayerFromDeals,
   EMPTY_PLAYOUT, startPlayout, setSakko, clearSakko, resetPlayout,
 });
