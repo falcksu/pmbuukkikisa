@@ -87,8 +87,18 @@ ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
 - Hakee `players`-rivin `p_player_id`:llä; jos `auth_id` on jo asetettu (ja ≠ auth.uid()) → virhe ("jo linkitetty").
 - Asettaa `auth_id = auth.uid()` (claim). Vaatii `auth.uid()`.
 
-> Molemmat funktiot tarkistavat, ettei käyttäjällä ole jo linkitettyä pelaajaa
-> (`auth_id`-uniikkius), jotta yksi tili = yksi pelaaja.
+**`list_unlinked_players()`** — palauttaa linkittämättömät pelaajat rekisteröinnin linkityslistaan:
+- Palauttaa `(id, nick, city)` riveistä joilla `auth_id IS NULL`.
+- **Miksi RPC eikä suora SELECT:** vasta rekisteröitynyt käyttäjä (sessio, ei vielä linkitettyä
+  pelaajaa) on juuri se, joka tätä listaa tarvitsee — mutta `players`-taulun SELECT-politiikka
+  vaatii `has_linked_player()`:n, joten suora SELECT estyisi häneltä. SECURITY DEFINER -funktio
+  ohittaa tämän ja palauttaa vain ei-arkaluontoiset kentät (id/nick/city).
+
+> Kaikki funktiot tarkistavat, ettei käyttäjällä ole jo linkitettyä pelaajaa
+> (`auth_id`-uniikkius), jotta yksi tili = yksi pelaaja. `register_player` nostaa selkeän
+> virheen ("tilillä on jo pelaaja") raa'an unique-violationin sijaan.
+> Kaikki SECURITY DEFINER -funktiot pinnataan: `SET search_path = public, pg_temp`
+> (estää search_path-pohjaisen oikeuksien kierron; Supabasen linter vaatii tätä).
 
 ---
 
@@ -148,6 +158,9 @@ $$;
 
 - anon-roolilla ei mitään politiikkaa → ei pääsyä.
 - Realtime kunnioittaa RLS:ää; client asettaa session tokenin (supabase-js hoitaa).
+- **Huom `meta`:** myös playoff/playout-payloadit ovat luettavissa vasta kun käyttäjällä on
+  linkitetty pelaaja. Client gating: `meta`-haut (ja muut datahaut) ajetaan vasta kun tila on
+  "sessio + linkitetty pelaaja" — ei aiemmin.
 
 ---
 
@@ -156,7 +169,8 @@ $$;
 ### 6.1 `db.js`
 - Lisätään auth-API: `signUp`, `signIn`, `signOut`, `getSession`, `onAuthStateChange`,
   `registerPlayer(nick, city, code)` (rpc), `linkExistingPlayer(playerId, code)` (rpc),
-  `fetchUnlinkedPlayers()` (SELECT players WHERE auth_id IS NULL — sallittu kirjautuneelle).
+  `fetchUnlinkedPlayers()` (kutsuu `list_unlinked_players` RPC:tä — EI suora SELECT, koska
+  luku-RLS estäisi sen linkittämättömältä käyttäjältä).
 - `init()` ajetaan vasta kun sessio on olemassa; muuten palautetaan tyhjä.
 - localStorage-fallback: **dev-only** tila ilman Supabasea ei tue oikeaa authia
   (kehitysapu; ei tuotannossa). Dokumentoidaan.
