@@ -1537,6 +1537,9 @@ function TabNav({ active, onChange, isAdmin }) {
       <button className={cls('tab-btn', active === 'report' && 'active')} onClick={() => onChange('report')}>
         📊 {isAdmin ? 'PÄIVÄRAPORTTI' : 'OMA RAPORTTI'}
       </button>
+      <button className={cls('tab-btn', active === 'archive' && 'active')} onClick={() => onChange('archive')}>
+        🏆 ARKISTO
+      </button>
     </div>
   );
 }
@@ -1749,6 +1752,88 @@ function AuthScreen({ linkStep, onLinked }) {
   );
 }
 
+// ── Aikajakso- ja järjestyssegmentit + dashboard-taulu (C) ───────────
+function PeriodBar({ periodKind, onKind, customStart, customEnd, onCustomStart, onCustomEnd, label }) {
+  const opts = [
+    { k: 'today', t: 'Tänään' }, { k: 'thisWeek', t: 'Viikko' }, { k: 'thisMonth', t: 'Kuukausi' },
+    { k: 'lastMonth', t: 'Viime kk' }, { k: 'thisYear', t: 'Vuosi' }, { k: 'custom', t: 'Oma väli' },
+  ];
+  return (
+    <div className="period-bar">
+      <div className="seg">
+        {opts.map(o => (
+          <button key={o.k} className={cls('seg-btn', periodKind === o.k && 'active')} onClick={() => onKind(o.k)}>{o.t}</button>
+        ))}
+      </div>
+      {periodKind === 'custom' && (
+        <div className="period-custom">
+          <input type="date" value={customStart} onChange={e => onCustomStart(e.target.value)} />
+          <span>–</span>
+          <input type="date" value={customEnd} onChange={e => onCustomEnd(e.target.value)} />
+        </div>
+      )}
+      <div className="period-label">{label}</div>
+    </div>
+  );
+}
+
+function RankTabs({ rankBy, onRankBy }) {
+  const opts = [
+    { k: 'buukit', t: 'Buukit' }, { k: 'megis', t: 'Megis' }, { k: 'eurot', t: '€' }, { k: 'tapaamiset', t: 'Tapaamiset' },
+  ];
+  return (
+    <div className="rank-tabs">
+      <span className="rank-tabs-lbl">Järjestä:</span>
+      <div className="seg">
+        {opts.map(o => (
+          <button key={o.k} className={cls('seg-btn', rankBy === o.k && 'active')} onClick={() => onRankBy(o.k)}>{o.t}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DashboardTable({ rows, rankBy, onSelect, meKey }) {
+  const cols = [
+    { k: 'luurit', t: 'Lähteneet' }, { k: 'vastatut', t: 'Vastatut' }, { k: 'buukit', t: 'Buukit' },
+    { k: 'tapaamiset', t: 'Tapaamiset' }, { k: 'dealsCount', t: 'Kaupat' }, { k: 'megisTotal', t: 'Megis' }, { k: 'eurTotal', t: '€' },
+  ];
+  const activeCol = rankBy === 'megis' ? 'megisTotal' : rankBy === 'eurot' ? 'eurTotal' : rankBy;
+  return (
+    <div className="dash-table-wrap">
+      <table className="dash-table">
+        <thead>
+          <tr>
+            <th className="dt-rank">#</th>
+            <th className="dt-player">Pelaaja</th>
+            {cols.map(c => <th key={c.k} className={cls('dt-num', c.k === activeCol && 'dt-active')}>{c.t}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && (
+            <tr><td colSpan={9} className="dt-empty">Ei dataa tälle ajanjaksolle.</td></tr>
+          )}
+          {rows.map(p => (
+            <tr key={p.key} className={cls(p.key === meKey && 'dt-me', p.rank <= 3 && 'dt-top')} onClick={() => onSelect && onSelect(p)}>
+              <td className="dt-rank">{String(p.rank).padStart(2, '0')}</td>
+              <td className="dt-player">
+                <span className="dt-avatar">{p.init}</span>
+                <span className="dt-nick">{p.nick}</span>
+                <span className="dt-city">{(p.city || '').toUpperCase()}</span>
+              </td>
+              {cols.map(c => (
+                <td key={c.k} className={cls('dt-num', c.k === activeCol && 'dt-active')}>
+                  {c.k === 'megisTotal' || c.k === 'eurTotal' ? Math.round(p[c.k] || 0) : (p[c.k] || 0)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
@@ -1782,6 +1867,11 @@ function App() {
   const [dailyStats, setDailyStats] = useState([]);
   const [deals, setDeals] = useState([]);
   const [activeTab, setActiveTab] = useState('leaderboard');
+  // Aikajaksot (C)
+  const [periodKind, setPeriodKind] = useState('thisMonth');
+  const [customStart, setCustomStart] = useState(() => localDateKey(new Date()));
+  const [customEnd, setCustomEnd] = useState(() => localDateKey(new Date()));
+  const [rankBy, setRankBy] = useState('buukit'); // buukit | megis | eurot | tapaamiset
 
   // DB init + realtime subscribe
   const playersMapRef = useRef({});
@@ -1932,6 +2022,19 @@ function App() {
     );
     return decoratePlayers(filtered);
   }, [playersMap, excludedKeys]);
+
+  // Jaksorajattu, valitulla mittarilla järjestetty sarjataulukko (C)
+  const periodInfo = useMemo(
+    () => periodRange(periodKind, null, customStart, customEnd),
+    [periodKind, customStart, customEnd]
+  );
+  const periodPlayers = useMemo(() => {
+    const arr = aggregatePlayersForPeriod(playersMap, dailyStats, deals, periodInfo.startKey, periodInfo.endKey)
+      .map(p => ({ ...p, vastausPct: pct(p.vastatut, p.luurit), buukkiPct: pct(p.buukit, p.vastatut) }));
+    const metric = rankBy === 'megis' ? 'megisTotal' : rankBy === 'eurot' ? 'eurTotal' : rankBy;
+    arr.sort((a, b) => ((b[metric] || 0) - (a[metric] || 0)) || ((b.buukit || 0) - (a.buukit || 0)));
+    return arr.map((p, i) => ({ ...p, rank: i + 1 }));
+  }, [playersMap, dailyStats, deals, periodInfo, rankBy]);
 
   // Kierroskohtaiset pisteet — kukin kierros alkaa nollista
   // QF: indeksit 10–11 (8.–9.6), SF: 12–14 (10.–12.6), F: 15–18 (15.–18.6)
@@ -2325,45 +2428,41 @@ function App() {
       <div className="app">
         <Header me={me} onLogout={handleLogout} playerCount={sorted.length} isAdmin today={today} dbBackend={dbBackend} />
         {t.showTicker && <Ticker items={tickerItems} paused={!t.pulse} />}
-        <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
         <TabNav active={activeTab} onChange={setActiveTab} isAdmin />
         {activeTab === 'report' || activeTab === 'teamreport' ? (
           <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sorted.filter(p => p.key !== ADMIN_KEY)} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
+        ) : activeTab === 'archive' ? (
+          <div className="main">
+            <div>
+              <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
+              {t.showBracket && (
+                <Bracket
+                  sorted={sortedPublic} playersMap={playersMap} playoff={playoff}
+                  playoffPointsMap={playoffPointsMap} roundPointsMaps={roundPointsMaps} isAdmin={true}
+                  onSelect={(p) => setSelectedKey(p.key)} onWin={handleSetWinner} onUndo={handleClearWinner}
+                  onStart={handleStartPlayoffs} onReset={handleResetPlayoffs}
+                />
+              )}
+            </div>
+            <div className="side">
+              <PlayoutPanel
+                playout={playout} sorted={sortedPublic} playersMap={playersMap} playoff={playoff}
+                playoffPointsMap={playoffPointsMap} isAdmin={true}
+                onStart={handleStartPlayout} onSetSakko={handleSetSakko} onClearSakko={handleClearSakko} onReset={handleResetPlayout}
+              />
+              <PrizeBanner />
+            </div>
+          </div>
         ) : (
         <div className="main">
           <div>
             <AdminPanel players={sorted} onDelete={handleDeletePlayer} onResetAll={handleResetAll} />
-            <Table sorted={sorted} onSelect={(p) => setSelectedKey(p.key)} flashKey={flashKey} meKey={null} isAdmin onDelete={handleDeletePlayer} sakkoKey={playout?.sakkoKey} excludedKeys={excludedKeys} onToggleExclude={toggleExcluded} />
+            <PeriodBar periodKind={periodKind} onKind={setPeriodKind} customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} label={periodInfo.label} />
+            <RankTabs rankBy={rankBy} onRankBy={setRankBy} />
+            <DashboardTable rows={periodPlayers} rankBy={rankBy} onSelect={(p) => setSelectedKey(p.key)} meKey={null} />
           </div>
           <div className="side">
-            {t.showPodium && <Podium sorted={sortedPublic} onSelect={(p) => setSelectedKey(p.key)} />}
-            {t.showBracket && (
-              <Bracket
-                sorted={sortedPublic}
-                playersMap={playersMap}
-                playoff={playoff}
-                playoffPointsMap={playoffPointsMap}
-                roundPointsMaps={roundPointsMaps}
-                isAdmin={true}
-                onSelect={(p) => setSelectedKey(p.key)}
-                onWin={handleSetWinner}
-                onUndo={handleClearWinner}
-                onStart={handleStartPlayoffs}
-                onReset={handleResetPlayoffs}
-              />
-            )}
-            <PlayoutPanel
-              playout={playout}
-              sorted={sortedPublic}
-              playersMap={playersMap}
-              playoff={playoff}
-              playoffPointsMap={playoffPointsMap}
-              isAdmin={true}
-              onStart={handleStartPlayout}
-              onSetSakko={handleSetSakko}
-              onClearSakko={handleClearSakko}
-              onReset={handleResetPlayout}
-            />
+            {t.showPodium && <Podium sorted={periodPlayers} onSelect={(p) => setSelectedKey(p.key)} />}
             <PrizeBanner />
           </div>
         </div>
@@ -2389,41 +2488,43 @@ function App() {
     <div className="app">
       <Header me={me} onLogout={handleLogout} playerCount={sortedPublic.length} today={today} dbBackend={dbBackend} />
       {t.showTicker && <Ticker items={tickerItems} paused={!t.pulse} />}
-      <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
       <TabNav active={activeTab} onChange={setActiveTab} isAdmin={false} />
       {activeTab === 'teamreport' ? (
         <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sortedPublic} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
       ) : activeTab === 'report' ? (
         <DailyReport currentKey={currentKey} isAdmin={false} dailyStats={dailyStats} players={sorted} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
+      ) : activeTab === 'archive' ? (
+        <div className="main">
+          <div>
+            <PhaseBanner phase={phase} today={today} totalDays={COMPETITION.totalDays} playoff={playoff} champion={champion} />
+            {t.showBracket && (
+              <Bracket
+                sorted={sortedPublic} playersMap={playersMap} playoff={playoff}
+                playoffPointsMap={playoffPointsMap} roundPointsMaps={roundPointsMaps} isAdmin={false}
+                onSelect={(p) => setSelectedKey(p.key)}
+              />
+            )}
+          </div>
+          <div className="side">
+            {playout?.started && (
+              <PlayoutPanel
+                playout={playout} sorted={sortedPublic} playersMap={playersMap} playoff={playoff}
+                playoffPointsMap={playoffPointsMap} isAdmin={false}
+              />
+            )}
+            <PrizeBanner />
+          </div>
+        </div>
       ) : (
       <div className="main">
         <div>
           <MyCard me={me} onAction={performAction} />
-          <Table sorted={sortedPublic} onSelect={(p) => setSelectedKey(p.key)} flashKey={flashKey} meKey={currentKey} sakkoKey={playout?.sakkoKey} />
+          <PeriodBar periodKind={periodKind} onKind={setPeriodKind} customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} label={periodInfo.label} />
+          <RankTabs rankBy={rankBy} onRankBy={setRankBy} />
+          <DashboardTable rows={periodPlayers} rankBy={rankBy} onSelect={(p) => setSelectedKey(p.key)} meKey={currentKey} />
         </div>
         <div className="side">
-          {t.showPodium && <Podium sorted={sortedPublic} onSelect={(p) => setSelectedKey(p.key)} />}
-          {t.showBracket && (
-            <Bracket
-              sorted={sortedPublic}
-              playersMap={playersMap}
-              playoff={playoff}
-              playoffPointsMap={playoffPointsMap}
-              roundPointsMaps={roundPointsMaps}
-              isAdmin={false}
-              onSelect={(p) => setSelectedKey(p.key)}
-            />
-          )}
-          {playout?.started && (
-            <PlayoutPanel
-              playout={playout}
-              sorted={sortedPublic}
-              playersMap={playersMap}
-              playoff={playoff}
-              playoffPointsMap={playoffPointsMap}
-              isAdmin={false}
-            />
-          )}
+          {t.showPodium && <Podium sorted={periodPlayers} onSelect={(p) => setSelectedKey(p.key)} />}
           <PrizeBanner />
         </div>
       </div>
