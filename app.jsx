@@ -1330,11 +1330,13 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
   const rawIdx = currentWeekdayIndex();
   const todayIdx = rawIdx >= 0 ? Math.min(rawIdx, WEEKDAY_DATE_KEYS.length - 1) : 0;
   const [selIdx, setSelIdx] = useState(todayIdx);
+  const [selDate, setSelDate] = useState(() => localDateKey(new Date())); // pelaajan valitsema pvm
   const [form, setForm] = useState({ luurit: 0, vastatut: 0, buukit: 0, tapaamiset: 0 });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const dateKey = weekdayIndexToDateKey(selIdx);
+  // Admin: kilpailukalenteri; pelaaja: vapaa päivämäärä
+  const dateKey = isAdmin ? weekdayIndexToDateKey(selIdx) : selDate;
 
   // Admin: group daily_stats by date, then by player
   const allPlayers = players;
@@ -1344,7 +1346,7 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
     if (isAdmin) return;
     const row = dailyStats.find(r => r.player_id === currentKey && r.date_key === dateKey);
     setForm(row ? { luurit: row.luurit||0, vastatut: row.vastatut||0, buukit: row.buukit||0, tapaamiset: row.tapaamiset||0 } : { luurit:0, vastatut:0, buukit:0, tapaamiset:0 });
-  }, [selIdx, dailyStats, currentKey, dateKey, isAdmin]);
+  }, [selDate, dailyStats, currentKey, dateKey, isAdmin]);
 
   const adj = (field, delta) => setForm(prev => {
     const next = { ...prev, [field]: Math.max(0, (prev[field]||0) + delta) };
@@ -1372,19 +1374,27 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
         {!isAdmin && <div className="dr-sub">Syötä päivän tilastosi — tallennus päivittää sarjataulukon</div>}
       </div>
 
-      {/* Day selector */}
-      <div className="dr-days">
-        {days.map((d) => (
-          <button
-            key={d.idx}
-            className={cls('dr-day-btn', d.idx === selIdx && 'active', d.idx === todayIdx && 'today-mark', d.idx >= 10 && 'playoff-day')}
-            onClick={() => setSelIdx(d.idx)}
-          >
-            <span className="wd">{d.wd}</span>
-            <span className="dt">{d.date}</span>
-          </button>
-        ))}
-      </div>
+      {/* Day selector: admin = kilpailukalenteri, pelaaja = päivämäärävalitsin */}
+      {isAdmin ? (
+        <div className="dr-days">
+          {days.map((d) => (
+            <button
+              key={d.idx}
+              className={cls('dr-day-btn', d.idx === selIdx && 'active', d.idx === todayIdx && 'today-mark', d.idx >= 10 && 'playoff-day')}
+              onClick={() => setSelIdx(d.idx)}
+            >
+              <span className="wd">{d.wd}</span>
+              <span className="dt">{d.date}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="dr-datepick">
+          <label>Päivä:</label>
+          <input type="date" value={selDate} max={localDateKey(new Date())} onChange={(e) => setSelDate(e.target.value)} />
+          <button className="dr-today-btn" onClick={() => setSelDate(localDateKey(new Date()))}>Tänään</button>
+        </div>
+      )}
 
       {isAdmin ? (
         /* Admin table */
@@ -1446,7 +1456,7 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
         /* Player entry form */
         <div className="dr-form">
           <div className="dr-form-title">
-            {days[selIdx]?.wd} {days[selIdx]?.date} — SYÖTÄ TILASTOT
+            {selDate} — SYÖTÄ TILASTOT
           </div>
           {[
             { key: 'luurit',   label: 'LÄHTENEET PUHELUT', max: null },
@@ -1492,14 +1502,13 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
           <table className="dr-sum-table">
             <thead><tr><th>Päivä</th><th>Lähteneet</th><th>Vastatut</th><th>Buukit</th><th>Vast%</th><th>Buuk%</th></tr></thead>
             <tbody>
-              {days.map((d, i) => {
-                const dk = weekdayIndexToDateKey(i);
-                const row = dailyStats.find(r => r.player_id === currentKey && r.date_key === dk);
-                if (!row && i > todayIdx) return null;
-                const l = row?.luurit||0, v = row?.vastatut||0, b = row?.buukit||0;
+              {dailyStats.filter(r => r.player_id === currentKey)
+                .slice().sort((a,b) => b.date_key.localeCompare(a.date_key)).slice(0, 30)
+                .map((row) => {
+                const l = row.luurit||0, v = row.vastatut||0, b = row.buukit||0;
                 return (
-                  <tr key={i} className={cls(i===selIdx&&'sel-row', i===todayIdx&&'today-row')}>
-                    <td>{d.wd} {d.date}</td>
+                  <tr key={row.date_key} className={cls(row.date_key===selDate&&'sel-row')}>
+                    <td>{row.date_key}</td>
                     <td>{l||'—'}</td>
                     <td>{v||'—'}</td>
                     <td style={{fontWeight:b>0?700:400,color:b>0?'var(--red)':'inherit'}}>{b||'—'}</td>
@@ -1507,7 +1516,7 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
                     <td>{v>0?Math.round(b/v*100)+'%':'—'}</td>
                   </tr>
                 );
-              }).filter(Boolean)}
+              })}
               <tr className="sum-total">
                 <td>YHTEENSÄ</td>
                 {['luurit','vastatut','buukit'].map(f => (
