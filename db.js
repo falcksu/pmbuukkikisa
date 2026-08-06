@@ -45,10 +45,13 @@
       streak:   row.streak   || 0,
       trendN:   row.trend_n  || 0,
       last5:    Array.isArray(row.last5) ? row.last5 : [0,0,0,0,0],
+      is_admin: !!row.is_admin,
       createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
       lastSeen:  row.last_seen  ? new Date(row.last_seen).getTime()  : Date.now(),
     };
   }
+  // Huom: playerToRow EI sisällä auth_id/is_admin-kenttiä tarkoituksella —
+  // upsert ei silloin ylikirjoita autentikointilinkkiä/admin-lippua.
   function playerToRow(p) {
     return {
       id:       p.key,
@@ -343,9 +346,43 @@
     return { players: initialPlayers, playoff: initialPlayoff, playout: initialPlayout, daily: initialDaily, deals: initialDeals };
   }
 
+  // ── Auth (osaprojekti B) ─────────────────────────
+  const hasAuth = !!(client && client.auth);
+
+  async function signUp(email, password) { return client.auth.signUp({ email, password }); }
+  async function signIn(email, password) { return client.auth.signInWithPassword({ email, password }); }
+  async function signOut() { return client.auth.signOut(); }
+  async function getSession() {
+    const { data } = await client.auth.getSession();
+    return data ? data.session : null;
+  }
+  function onAuthChange(cb) {
+    const { data } = client.auth.onAuthStateChange((_e, s) => cb(s));
+    return () => { try { data.subscription.unsubscribe(); } catch (e) {} };
+  }
+  async function registerPlayer(nick, city, code) {
+    return client.rpc('register_player', { p_nick: nick, p_city: city, p_code: code });
+  }
+  async function linkExistingPlayer(playerId, code) {
+    return client.rpc('link_existing_player', { p_player_id: playerId, p_code: code });
+  }
+  async function fetchUnlinkedPlayers() {
+    const { data, error } = await client.rpc('list_unlinked_players');
+    if (error) { console.error('list_unlinked_players error:', error); return []; }
+    return data || [];
+  }
+  async function fetchMyPlayer(authId) {
+    const { data, error } = await client.from('players').select('*').eq('auth_id', authId).maybeSingle();
+    if (error) { console.error('fetchMyPlayer error:', error); return null; }
+    return data ? rowToPlayer(data) : null;
+  }
+
   window.DB = {
     isConfigured,
     backend: client ? 'supabase' : 'local',
+    hasAuth,
+    signUp, signIn, signOut, getSession, onAuthChange,
+    registerPlayer, linkExistingPlayer, fetchUnlinkedPlayers, fetchMyPlayer,
     init,
     subscribe,
     upsertPlayer,
