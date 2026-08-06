@@ -2177,9 +2177,9 @@ function App() {
     if (updatedPlayer) DB.upsertPlayer(updatedPlayer);
 
     // Also update daily_stats for today (fire-and-forget)
-    const dayIdx2 = currentWeekdayIndex();
-    const dateKey2 = weekdayIndexToDateKey(dayIdx2);
-    if (dateKey2 && dayIdx2 >= 0 && (kind === 'luuri' || kind === 'vastattu' || kind === 'buukki' || kind === '-buukki' || kind === 'tapaaminen')) {
+    // Kirjaa aina oikealle kalenteripäivälle (ei kisakalenteriin)
+    const dateKey2 = localDateKey(new Date());
+    if (dateKey2 && (kind === 'luuri' || kind === 'vastattu' || kind === 'buukki' || kind === '-buukki' || kind === 'tapaaminen')) {
       setDailyStats(prev => {
         const existing = prev.find(r => r.player_id === currentKey && r.date_key === dateKey2);
         const ds = existing
