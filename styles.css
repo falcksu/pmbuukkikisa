@@ -2489,3 +2489,95 @@ body { font-size: 14px; }
 }
 .auth-submit:hover { background: var(--accent); }
 .auth-submit:disabled { opacity: .6; cursor: default; }
+
+/* ── Aikajaksot & dashboard (osaprojekti C) — premium ────────────── */
+.period-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 12px;
+}
+.rank-tabs { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.rank-tabs-lbl {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+/* Segmented control */
+.seg {
+  display: inline-flex; background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 3px; gap: 2px; overflow: hidden;
+}
+.seg-btn {
+  border: none; background: transparent; cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px;
+  letter-spacing: .03em; color: var(--ink-3); padding: 7px 14px; border-radius: 7px;
+  transition: background .15s, color .15s;
+}
+.seg-btn:hover { color: var(--ink); }
+.seg-btn.active {
+  background: var(--ink); color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.18);
+}
+.period-custom { display: inline-flex; align-items: center; gap: 6px; }
+.period-custom input {
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: #fff;
+  font-size: 13px; color: var(--ink);
+}
+.period-label {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .06em;
+  color: var(--ink-4); text-transform: uppercase; margin-left: auto;
+}
+
+/* Dashboard-taulu */
+.dash-table-wrap {
+  border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.dash-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.dash-table thead th {
+  text-align: right; padding: 12px 14px; background: var(--ink); color: #d9d4cc;
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px;
+  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+}
+.dash-table thead th.dt-rank { text-align: center; width: 44px; }
+.dash-table thead th.dt-player { text-align: left; }
+.dash-table thead th.dt-active { color: var(--accent); }
+.dash-table tbody td {
+  padding: 12px 14px; border-top: 1px solid var(--line); text-align: right;
+  font-family: 'JetBrains Mono', monospace; color: var(--ink-2); white-space: nowrap;
+}
+.dash-table tbody tr { cursor: pointer; transition: background .12s; }
+.dash-table tbody tr:hover { background: var(--bg-2); }
+.dash-table tbody tr.dt-me { background: rgba(255,74,26,.06); }
+.dash-table tbody tr.dt-top td { font-weight: 700; }
+.dash-table td.dt-active { color: var(--accent); font-weight: 700; background: rgba(255,74,26,.04); }
+.dash-table td.dt-rank {
+  text-align: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 800;
+  font-size: 16px; color: var(--ink); width: 44px;
+}
+.dash-table tr.dt-top td.dt-rank { color: var(--accent); }
+.dash-table td.dt-player {
+  text-align: left; display: flex; align-items: center; gap: 10px;
+  font-family: 'Inter', sans-serif;
+}
+.dash-table .dt-avatar {
+  width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 12px; flex-shrink: 0;
+}
+.dash-table .dt-nick { font-weight: 700; color: var(--ink); }
+.dash-table .dt-city { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-4); letter-spacing: .05em; }
+.dt-empty { text-align: center !important; color: var(--ink-4); font-family: 'Inter', sans-serif; font-style: italic; padding: 28px !important; }
+
+/* Oma raportti — päivämäärävalitsin */
+.dr-datepick { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.dr-datepick label { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.dr-datepick input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; font-size: 14px; }
+.dr-today-btn { padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2); cursor: pointer; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px; }
+.dr-today-btn:hover { background: var(--ink); color: #fff; }
+
+@media (max-width: 640px) {
+  .dash-table { font-size: 12px; }
+  .dash-table thead th, .dash-table tbody td { padding: 8px 8px; }
+  .period-label { display: none; }
+  .dash-table td.dt-player { gap: 6px; }
+  .dash-table .dt-city { display: none; }
+}
