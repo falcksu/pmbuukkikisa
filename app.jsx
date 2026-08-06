@@ -1609,13 +1609,158 @@ function PlayoutPanel({ playout, sorted, playersMap, playoff, playoffPointsMap, 
   );
 }
 
+// Supabase/RPC-virheiden käännös suomeksi
+function authErrorFi(err) {
+  const m = ((err && err.message) || '').toLowerCase();
+  if (m.includes('invalid login')) return 'Väärä sähköposti tai salasana';
+  if (m.includes('already registered') || m.includes('already been registered')) return 'Sähköposti on jo rekisteröity';
+  if (m.includes('invite')) return 'Virheellinen kutsukoodi';
+  if (m.includes('name taken')) return 'Nimi varattu — käytä linkitystä';
+  if (m.includes('already has a player')) return 'Tällä tilillä on jo pelaaja';
+  if (m.includes('already linked')) return 'Pelaaja on jo linkitetty toiselle tilille';
+  if (m.includes('player not found')) return 'Pelaajaa ei löytynyt';
+  if (m.includes('password')) return 'Salasana ei kelpaa (väh. 8 merkkiä)';
+  return (err && err.message) || 'Tuntematon virhe';
+}
+
+// Oikea autentikointi (tuotanto). linkStep=true: sessio on, mutta pelaaja puuttuu.
+function AuthScreen({ linkStep, onLinked }) {
+  const [tab, setTab] = useState(linkStep ? 'register' : 'login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [mode, setMode] = useState('new');          // 'new' | 'link'
+  const [nick, setNick] = useState('');
+  const [city, setCity] = useState('');
+  const [playerId, setPlayerId] = useState('');
+  const [unlinked, setUnlinked] = useState([]);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if ((tab === 'register' || linkStep) && mode === 'link') {
+      DB.fetchUnlinkedPlayers().then(setUnlinked).catch(() => setUnlinked([]));
+    }
+  }, [tab, mode, linkStep]);
+
+  const doLogin = async () => {
+    setError(''); setBusy(true);
+    const { error } = await DB.signIn(email.trim(), password);
+    setBusy(false);
+    if (error) setError(authErrorFi(error));
+    // onnistuessa onAuthChange hoitaa siirtymän
+  };
+
+  const doRegister = async () => {
+    setError('');
+    // Validointi
+    if (linkStep) {
+      if (!code.trim()) { setError('Kutsukoodi puuttuu'); return; }
+      if (mode === 'link' && !playerId) { setError('Valitse linkitettävä pelaaja'); return; }
+      if (mode === 'new' && (nick.trim().length < 2 || city.trim().length < 2)) { setError('Nimi ja paikkakunta väh. 2 merkkiä'); return; }
+    } else {
+      const v = validateRegForm({ email, password, code, mode, nick, city, playerId });
+      if (!v.ok) { setError(v.error); return; }
+    }
+    setBusy(true);
+    let uid = null;
+    if (linkStep) {
+      const s = await DB.getSession();
+      uid = s ? s.user.id : null;
+    } else {
+      const { data, error } = await DB.signUp(email.trim(), password);
+      if (error) { setBusy(false); setError(authErrorFi(error)); return; }
+      uid = (data.user && data.user.id) || (data.session && data.session.user.id) || null;
+      if (!uid) { setBusy(false); setError('Rekisteröinti ei palauttanut sessiota (onko sähköpostivahvistus päällä?)'); return; }
+    }
+    const res = mode === 'link'
+      ? await DB.linkExistingPlayer(playerId, code.trim())
+      : await DB.registerPlayer(nick.trim(), city.trim(), code.trim());
+    if (res && res.error) { setBusy(false); setError(authErrorFi(res.error)); return; }
+    const player = await DB.fetchMyPlayer(uid);
+    setBusy(false);
+    if (player) onLinked(player);
+    else setError('Linkitys epäonnistui — yritä uudelleen');
+  };
+
+  const showRegister = tab === 'register' || linkStep;
+
+  return (
+    <div className="auth-bg">
+      <div className="auth-card">
+        <div className="auth-head">
+          <span className="auth-bolt">⚡</span>
+          <span className="auth-title">MYYNTITERMINAALI</span>
+        </div>
+
+        {!linkStep && (
+          <div className="auth-tabs">
+            <button className={cls('auth-tab', tab === 'login' && 'active')} onClick={() => { setTab('login'); setError(''); }}>Kirjaudu</button>
+            <button className={cls('auth-tab', tab === 'register' && 'active')} onClick={() => { setTab('register'); setError(''); }}>Rekisteröidy</button>
+          </div>
+        )}
+        {linkStep && <div className="auth-sub">Olet kirjautunut — luo pelaaja tai linkitä olemassa oleva</div>}
+
+        {!linkStep && (
+          <>
+            <label className="auth-field"><span>Sähköposti</span>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" /></label>
+            <label className="auth-field"><span>Salasana</span>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={showRegister ? 'new-password' : 'current-password'} /></label>
+          </>
+        )}
+
+        {showRegister && (
+          <>
+            <label className="auth-field"><span>Kutsukoodi</span>
+              <input type="text" value={code} onChange={e => setCode(e.target.value)} /></label>
+
+            <div className="auth-mode">
+              <button className={cls('auth-mode-btn', mode === 'new' && 'active')} onClick={() => { setMode('new'); setError(''); }}>Luo uusi pelaaja</button>
+              <button className={cls('auth-mode-btn', mode === 'link' && 'active')} onClick={() => { setMode('link'); setError(''); }}>Linkitä olemassa oleva</button>
+            </div>
+
+            {mode === 'new' ? (
+              <div className="auth-row2">
+                <label className="auth-field"><span>Nimi</span>
+                  <input type="text" value={nick} onChange={e => setNick(e.target.value)} placeholder="Lempinimi" /></label>
+                <label className="auth-field"><span>Paikkakunta</span>
+                  <input type="text" value={city} onChange={e => setCity(e.target.value)} /></label>
+              </div>
+            ) : (
+              <label className="auth-field"><span>Valitse pelaaja</span>
+                <select value={playerId} onChange={e => setPlayerId(e.target.value)}>
+                  <option value="">— valitse linkittämätön pelaaja —</option>
+                  {unlinked.map(p => <option key={p.id} value={p.id}>{p.nick} · {p.city}</option>)}
+                </select>
+                {unlinked.length === 0 && <span className="auth-hint">Ei linkittämättömiä pelaajia.</span>}
+              </label>
+            )}
+          </>
+        )}
+
+        {error && <div className="auth-error">{error}</div>}
+
+        <button className="auth-submit" disabled={busy} onClick={showRegister ? doRegister : doLogin}>
+          {busy ? 'Hetki…' : (showRegister ? (linkStep ? 'Vahvista' : 'Rekisteröidy') : 'Kirjaudu')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('buukkikisa.pw') === '1');
+
+  // Auth (osaprojekti B). Tuotannossa (DB.hasAuth) käytetään Supabase Authia;
+  // dev-localissa (ei Supabasea) säilyy yksinkertainen nimi-kirjautuminen.
+  const [session, setSession] = useState(null);
+  const [linkedPlayer, setLinkedPlayer] = useState(null);
+  const [authReady, setAuthReady] = useState(() => !DB.hasAuth); // local: valmis heti
 
   // Persistent state — pelaajat tulee DB:stä (Supabase tai LS fallback)
   const [playersMap, setPlayersMap] = useState({});
-  const [currentKey, setCurrentKey] = useState(() => loadCurrentKey());
+  const [currentKey, setCurrentKey] = useState(() => (DB.hasAuth ? null : loadCurrentKey()));
   const [dbBackend, setDbBackend] = useState('local');
 
   // UI state
@@ -1644,6 +1789,7 @@ function App() {
   const playoutRef    = useRef(EMPTY_PLAYOUT);
   const dailyRef      = useRef([]);
   const dealsRef      = useRef([]);
+  const isAdminRef    = useRef(false); // vakaa admin-tarkistus callbackeille
 
   function applyDerivedToPlayers(rawMap, rows, dealRows) {
     const out = {};
@@ -1657,7 +1803,32 @@ function App() {
     return out;
   }
 
+  // Auth-alustus (tuotanto): sessio + kuuntelija. Hakee linkitetyn pelaajan.
   useEffect(() => {
+    if (!DB.hasAuth) return;
+    let unsub;
+    (async () => {
+      const s = await DB.getSession();
+      setSession(s);
+      if (s) { const p = await DB.fetchMyPlayer(s.user.id); setLinkedPlayer(p); }
+      setAuthReady(true);
+      unsub = DB.onAuthChange(async (ns) => {
+        setSession(ns);
+        if (ns) { const p = await DB.fetchMyPlayer(ns.user.id); setLinkedPlayer(p); }
+        else { setLinkedPlayer(null); }
+      });
+    })();
+    return () => { if (unsub) unsub(); };
+  }, []);
+
+  // Tuotannossa currentKey seuraa linkitettyä pelaajaa
+  useEffect(() => {
+    if (DB.hasAuth) setCurrentKey(linkedPlayer ? linkedPlayer.key : null);
+  }, [linkedPlayer]);
+
+  // Datalataus + realtime. Tuotannossa vasta kun pelaaja on linkitetty.
+  useEffect(() => {
+    if (DB.hasAuth && !linkedPlayer) return;
     let unsubP, unsubPO, unsubPout, unsubD, unsubDeals;
     (async () => {
       const initial = await DB.init();
@@ -1722,7 +1893,7 @@ function App() {
       if (unsubD) unsubD();
       if (unsubDeals) unsubDeals();
     };
-  }, []);
+  }, [DB.hasAuth ? !!linkedPlayer : true]);
 
   // Phase auto-päivitys (joka 5 min)
   useEffect(() => {
@@ -1757,7 +1928,7 @@ function App() {
   // Julkinen lista — ilman adminia ja piilotetut pelaajat
   const sortedPublic = useMemo(() => {
     const filtered = Object.fromEntries(
-      Object.entries(playersMap).filter(([k]) => k !== ADMIN_KEY && !excludedKeys.has(k))
+      Object.entries(playersMap).filter(([k, p]) => k !== ADMIN_KEY && !p.is_admin && !excludedKeys.has(k))
     );
     return decoratePlayers(filtered);
   }, [playersMap, excludedKeys]);
@@ -1802,10 +1973,16 @@ function App() {
     });
   }, []);
 
-  const isAdmin = currentKey === ADMIN_KEY;
-  const me = isAdmin
-    ? { key: ADMIN_KEY, nick: ADMIN_NICK, city: 'Tampere', init: 'AD', isAdmin: true }
-    : (currentKey ? sorted.find(p => p.key === currentKey) : null);
+  // Admin: tuotannossa is_admin-lipusta, dev-localissa ADMIN_KEY-sentinel
+  const isAdmin = DB.hasAuth
+    ? (linkedPlayer ? linkedPlayer.is_admin === true : false)
+    : (currentKey === ADMIN_KEY);
+  const me = DB.hasAuth
+    ? (currentKey ? sorted.find(p => p.key === currentKey) : null)
+    : (isAdmin
+        ? { key: ADMIN_KEY, nick: ADMIN_NICK, city: 'Tampere', init: 'AD', is_admin: true }
+        : (currentKey ? sorted.find(p => p.key === currentKey) : null));
+  isAdminRef.current = isAdmin;
 
   // ── Login / logout / reset ───────────────────
   const handleLogin = useCallback((nick, city) => {
@@ -1838,9 +2015,11 @@ function App() {
   }, []);
 
   const handleLogout = useCallback(() => {
-    sessionStorage.removeItem('buukkikisa.pw');
-    setUnlocked(false);
-    setCurrentKey(null);
+    if (DB.hasAuth) {
+      DB.signOut(); // onAuthChange nollaa session + linkedPlayer
+    } else {
+      setCurrentKey(null);
+    }
   }, []);
 
   const handleResetAll = useCallback(() => {
@@ -1909,7 +2088,7 @@ function App() {
       ? new Set(Object.values(playoffRef.current.seeds || {}))
       : null;
     const candidates = decoratePlayers(
-      Object.fromEntries(Object.entries(playersMapRef.current).filter(([k]) => k !== ADMIN_KEY && !excludedKeysRef.current.has(k)))
+      Object.fromEntries(Object.entries(playersMapRef.current).filter(([k, p]) => k !== ADMIN_KEY && !p.is_admin && !excludedKeysRef.current.has(k)))
     );
     const nonPlayoff = inPlayoffSet
       ? candidates.filter(p => !inPlayoffSet.has(p.key))
@@ -1936,7 +2115,7 @@ function App() {
 
   // ── Actions for current user ───────────────────
   const performAction = useCallback((kind, rect) => {
-    if (!currentKey || currentKey === ADMIN_KEY) return;
+    if (!currentKey || currentKey === ADMIN_KEY || isAdminRef.current) return;
     let minus = kind === '-buukki';
     let resultingNote = null;
     let didCrossPlayoff = false;
@@ -2044,7 +2223,7 @@ function App() {
 
   // Tallenna päiväraportti-rivi ja päivitä pelaajan kokonaistilasto
   const handleAddDeal = useCallback(async ({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount }) => {
-    if (!currentKey || currentKey === ADMIN_KEY) return;
+    if (!currentKey || currentKey === ADMIN_KEY || isAdminRef.current) return;
     // Kauppa ankkuroidaan allekirjoituspäivään (oletus: tänään)
     const dateKey = (signedDate && signedDate.trim()) ? signedDate.trim() : localDateKey(new Date());
     const sameDay = dealsRef.current.filter(d => d.player_id === currentKey && d.date_key === dateKey);
@@ -2073,7 +2252,7 @@ function App() {
   }, [currentKey]);
 
   const handleDeleteDeal = useCallback(async (id) => {
-    if (!currentKey || currentKey === ADMIN_KEY) return;
+    if (!currentKey || currentKey === ADMIN_KEY || isAdminRef.current) return;
     await DB.deleteDeal(id);
     const nextDeals = dealsRef.current.filter(d => d.id !== id);
     dealsRef.current = nextDeals;
@@ -2087,7 +2266,7 @@ function App() {
   }, [currentKey]);
 
   const handleSaveDay = useCallback(async (dateKey, stats) => {
-    if (!currentKey || currentKey === ADMIN_KEY) return;
+    if (!currentKey || currentKey === ADMIN_KEY || isAdminRef.current) return;
     await DB.upsertDailyStats(currentKey, dateKey, stats);
     const updatedDaily = [
       ...dailyStats.filter(r => !(r.player_id === currentKey && r.date_key === dateKey)),
@@ -2111,14 +2290,30 @@ function App() {
     }
   }, [currentKey, dailyStats, playersMap]);
 
-  // Password gate
-  if (!unlocked) {
-    return <PasswordGate onUnlock={() => setUnlocked(true)} />;
-  }
-
-  // Login gate
-  if (!me) {
-    return <LoginScreen onLogin={handleLogin} existingPlayers={playersMap} />;
+  // ── Auth gate ───────────────────────────
+  if (DB.hasAuth) {
+    if (!authReady) {
+      return <div className="auth-loading">Ladataan…</div>;
+    }
+    const gate = resolveAuthGate(session, linkedPlayer);
+    if (gate === 'auth' || gate === 'link') {
+      return (
+        <AuthScreen
+          linkStep={gate === 'link'}
+          onSignedIn={setSession}
+          onLinked={setLinkedPlayer}
+        />
+      );
+    }
+    // gate === 'app' → data vielä latautumassa jos me puuttuu
+    if (!me) {
+      return <div className="auth-loading">Ladataan tietoja…</div>;
+    }
+  } else {
+    // dev-local: yksinkertainen nimi-kirjautuminen (ei turvattu, vain kehitys)
+    if (!me) {
+      return <LoginScreen onLogin={handleLogin} existingPlayers={playersMap} />;
+    }
   }
 
   const selected = selectedKey ? sorted.find(p => p.key === selectedKey) : null;
