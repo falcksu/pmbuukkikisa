@@ -341,6 +341,57 @@ function resetPlayout() {
   return { ...EMPTY_PLAYOUT };
 }
 
+// ── Aikajaksot (osaprojekti C) ────────────────────────────
+// Aikaväli valitulle jaksolle. Palauttaa {startKey,endKey,label} muodossa YYYY-MM-DD.
+function periodRange(kind, refDate, customStart, customEnd) {
+  const d = refDate ? new Date(refDate) : new Date();
+  const y = d.getFullYear(), m = d.getMonth();
+  const key = (yy, mm, dd) => `${yy}-${String(mm + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+  const lastDay = (yy, mm) => new Date(yy, mm + 1, 0).getDate();
+  if (kind === 'today') { const k = localDateKey(d); return { startKey: k, endKey: k, label: 'Tänään' }; }
+  if (kind === 'thisWeek') {
+    const dow = (d.getDay() + 6) % 7; // ma=0
+    const mon = new Date(d); mon.setDate(d.getDate() - dow);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    return { startKey: localDateKey(mon), endKey: localDateKey(sun), label: 'Tämä viikko' };
+  }
+  if (kind === 'thisMonth') return { startKey: key(y, m, 1), endKey: key(y, m, lastDay(y, m)), label: 'Tämä kuukausi' };
+  if (kind === 'lastMonth') {
+    const pm = new Date(y, m - 1, 1); const py = pm.getFullYear(), pmo = pm.getMonth();
+    return { startKey: key(py, pmo, 1), endKey: key(py, pmo, lastDay(py, pmo)), label: 'Viime kuukausi' };
+  }
+  if (kind === 'thisYear') return { startKey: key(y, 0, 1), endKey: key(y, 11, 31), label: 'Tämä vuosi' };
+  if (kind === 'custom') return { startKey: customStart, endKey: customEnd, label: 'Oma väli' };
+  const k = localDateKey(d); return { startKey: k, endKey: k, label: 'Tänään' };
+}
+
+// Jaksorajattu pelaaja-aggregointi. Admin/is_admin suodatetaan pois.
+function aggregatePlayersForPeriod(playersMap, dailyStats, deals, startKey, endKey) {
+  const inRange = (dk) => dk >= startKey && dk <= endKey;
+  const out = [];
+  Object.values(playersMap || {}).forEach(p => {
+    if (!p || p.key === '__admin__' || p.is_admin) return;
+    let luurit = 0, vastatut = 0, buukit = 0, tapaamiset = 0;
+    (dailyStats || []).forEach(r => {
+      if (r.player_id === p.key && inRange(r.date_key)) {
+        luurit += r.luurit || 0; vastatut += r.vastatut || 0; buukit += r.buukit || 0; tapaamiset += r.tapaamiset || 0;
+      }
+    });
+    let dealsCount = 0, megisTotal = 0, eurTotal = 0;
+    (deals || []).forEach(dl => {
+      if (dl.player_id === p.key && inRange(dl.date_key)) {
+        dealsCount++; megisTotal += Number(dl.megis) || 0; eurTotal += Number(dl.eurot) || 0;
+      }
+    });
+    out.push({
+      ...p, luurit, vastatut, buukit, tapaamiset, dealsCount, megisTotal, eurTotal,
+      avgMegis: dealsCount ? megisTotal / dealsCount : 0,
+      avgEur: dealsCount ? eurTotal / dealsCount : 0,
+    });
+  });
+  return out;
+}
+
 // ── Auth (osaprojekti B) ────────────────────────────
 // Palauttaa näkymän: 'auth' (ei sessiota), 'link' (sessio ilman pelaajaa), 'app' (valmis)
 function resolveAuthGate(session, linkedPlayer) {
@@ -366,6 +417,7 @@ function validateRegForm(f) {
 Object.assign(window, {
   COMPETITION,
   resolveAuthGate, validateEmail, validateRegForm,
+  periodRange, aggregatePlayersForPeriod,
   LS_CURRENT,
   playerKey, emptyStats,
   loadCurrentKey, saveCurrentKey,
