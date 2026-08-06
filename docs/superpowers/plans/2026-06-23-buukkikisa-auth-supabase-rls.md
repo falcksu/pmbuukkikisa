@@ -87,8 +87,10 @@ BEGIN
   IF EXISTS (SELECT 1 FROM players WHERE auth_id=v_uid) THEN RAISE EXCEPTION 'account already has a player'; END IF;
   v_slug := lower(trim(p_nick)) || ':' || lower(trim(p_city));
   IF EXISTS (SELECT 1 FROM players WHERE id=v_slug) THEN RAISE EXCEPTION 'name taken, use linking'; END IF;
-  INSERT INTO players (id, nick, city, init, auth_id, luurit, vastatut, buukit, tapaamiset)
-    VALUES (v_slug, upper(trim(p_nick)), trim(p_city), upper(left(trim(p_nick),2)), v_uid, 0,0,0,0);
+  -- HUOM: players-taulussa EI ole tapaamiset-saraketta (se on daily_stats:ssä);
+  -- pelaajan tapaamiset-aggregaatti lasketaan daily_stats-riveistä.
+  INSERT INTO players (id, nick, city, init, auth_id, luurit, vastatut, buukit)
+    VALUES (v_slug, upper(trim(p_nick)), trim(p_city), upper(left(trim(p_nick),2)), v_uid, 0,0,0);
   RETURN v_slug;
 END; $$;
 
