@@ -341,8 +341,31 @@ function resetPlayout() {
   return { ...EMPTY_PLAYOUT };
 }
 
+// ── Auth (osaprojekti B) ────────────────────────────
+// Palauttaa näkymän: 'auth' (ei sessiota), 'link' (sessio ilman pelaajaa), 'app' (valmis)
+function resolveAuthGate(session, linkedPlayer) {
+  if (!session) return 'auth';
+  if (!linkedPlayer) return 'link';
+  return 'app';
+}
+function validateEmail(v) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((v || '').trim()); }
+function validateRegForm(f) {
+  f = f || {};
+  if (!validateEmail(f.email)) return { ok: false, error: 'Virheellinen sähköposti' };
+  if (!f.password || f.password.length < 8) return { ok: false, error: 'Salasana väh. 8 merkkiä' };
+  if (!f.code || !f.code.trim()) return { ok: false, error: 'Kutsukoodi puuttuu' };
+  if (f.mode === 'link') {
+    if (!f.playerId) return { ok: false, error: 'Valitse linkitettävä pelaaja' };
+    return { ok: true };
+  }
+  if (!f.nick || f.nick.trim().length < 2) return { ok: false, error: 'Nimi väh. 2 merkkiä' };
+  if (!f.city || f.city.trim().length < 2) return { ok: false, error: 'Paikkakunta väh. 2 merkkiä' };
+  return { ok: true };
+}
+
 Object.assign(window, {
   COMPETITION,
+  resolveAuthGate, validateEmail, validateRegForm,
   LS_CURRENT,
   playerKey, emptyStats,
   loadCurrentKey, saveCurrentKey,
