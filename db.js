@@ -93,8 +93,10 @@
 
   async function upsertPlayer(player) {
     if (client) {
-      const { error } = await client.from('players').upsert(playerToRow(player));
-      if (error) console.error('Upsert error:', error);
+      // players-taululla ei ole INSERT-politiikkaa (rivit luodaan vain register_player-RPC:llä),
+      // joten päivitetään olemassa olevaa riviä. RLS sallii vain oman rivin (owns_player) / adminin.
+      const { error } = await client.from('players').update(playerToRow(player)).eq('id', player.key);
+      if (error) console.error('Update player error:', error);
     } else {
       const map = loadLocal();
       map[player.key] = player;
