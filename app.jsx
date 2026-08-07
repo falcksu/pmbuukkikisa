@@ -1229,6 +1229,59 @@ function TweaksUI({ t, setTweak, onResetAll, isAdmin }) {
 
 // ── DailyReport ───────────────────────────
 
+// Kaupan lisäys -modaali (etusivulta)
+function DealModal({ onAdd, onClose }) {
+  const today = localDateKey(new Date());
+  const [toimiala, setToimiala] = useState('');
+  const [megis, setMegis] = useState('');
+  const [eurot, setEurot] = useState('');
+  const [firstMeetingDate, setFirstMeetingDate] = useState('');
+  const [signedDate, setSignedDate] = useState(today);
+  const [meetingCount, setMeetingCount] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!megis && !eurot && !toimiala.trim()) return;
+    setSaving(true);
+    await onAdd({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount });
+    setSaving(false);
+    onClose();
+  };
+
+  return (
+    <div className="deal-modal-overlay" onClick={onClose}>
+      <div className="deal-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="deal-modal-head">
+          <span className="deal-modal-title">➕ LISÄÄ KAUPPA</span>
+          <button className="deal-modal-x" onClick={onClose}>✕</button>
+        </div>
+        <div className="deal-form">
+          <input className="deal-input" type="text" placeholder="Toimiala (vain toimiala, ei asiakkaan nimeä)"
+                 value={toimiala} onChange={e => setToimiala(e.target.value)} autoFocus />
+          <div className="deal-form-nums">
+            <input className="deal-input" type="number" min="0" placeholder="Megis"
+                   value={megis} onChange={e => setMegis(e.target.value)} />
+            <input className="deal-input" type="number" min="0" placeholder="Eurot"
+                   value={eurot} onChange={e => setEurot(e.target.value)} />
+            <input className="deal-input" type="number" min="0" placeholder="Tapaamisia"
+                   value={meetingCount} onChange={e => setMeetingCount(e.target.value)} />
+          </div>
+          <div className="deal-form-dates">
+            <label className="deal-date-field"><span>1. tapaaminen</span>
+              <input className="deal-input" type="date" value={firstMeetingDate} onChange={e => setFirstMeetingDate(e.target.value)} /></label>
+            <label className="deal-date-field"><span>Allekirjoitettu</span>
+              <input className="deal-input" type="date" value={signedDate} onChange={e => setSignedDate(e.target.value)} /></label>
+          </div>
+          <div className="deal-form-actions">
+            <button className="deal-save" disabled={saving} onClick={submit}>{saving ? 'Tallennetaan…' : 'Tallenna kauppa'}</button>
+            <button className="deal-cancel" onClick={onClose}>Peruuta</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DealEntry({ deals, onAdd, onDelete }) {
   const today = localDateKey(new Date());
   const [open, setOpen] = useState(false);
@@ -1334,9 +1387,15 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
   const [form, setForm] = useState({ luurit: 0, vastatut: 0, buukit: 0, tapaamiset: 0 });
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Tiimiraportti (admin): aikajakso + laajennettava päiväerittely
+  const [teamPeriod, setTeamPeriod] = useState('thisMonth');
+  const [teamCStart, setTeamCStart] = useState(() => localDateKey(new Date()));
+  const [teamCEnd, setTeamCEnd] = useState(() => localDateKey(new Date()));
+  const [expandedKey, setExpandedKey] = useState(null);
+  const teamRange = periodRange(teamPeriod, null, teamCStart, teamCEnd);
 
-  // Admin: kilpailukalenteri; pelaaja: vapaa päivämäärä
-  const dateKey = isAdmin ? weekdayIndexToDateKey(selIdx) : selDate;
+  // Pelaaja: vapaa päivämäärä
+  const dateKey = selDate;
 
   // Admin: group daily_stats by date, then by player
   const allPlayers = players;
@@ -1374,20 +1433,9 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
         {!isAdmin && <div className="dr-sub">Syötä päivän tilastosi — tallennus päivittää sarjataulukon</div>}
       </div>
 
-      {/* Day selector: admin = kilpailukalenteri, pelaaja = päivämäärävalitsin */}
+      {/* Aikajakso: admin = tiimiraportin jakso; pelaaja = päivämäärävalitsin */}
       {isAdmin ? (
-        <div className="dr-days">
-          {days.map((d) => (
-            <button
-              key={d.idx}
-              className={cls('dr-day-btn', d.idx === selIdx && 'active', d.idx === todayIdx && 'today-mark', d.idx >= 10 && 'playoff-day')}
-              onClick={() => setSelIdx(d.idx)}
-            >
-              <span className="wd">{d.wd}</span>
-              <span className="dt">{d.date}</span>
-            </button>
-          ))}
-        </div>
+        <PeriodBar periodKind={teamPeriod} onKind={setTeamPeriod} customStart={teamCStart} customEnd={teamCEnd} onCustomStart={setTeamCStart} onCustomEnd={setTeamCEnd} label={teamRange.label} />
       ) : (
         <div className="dr-datepick">
           <label>Päivä:</label>
@@ -1397,61 +1445,78 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
       )}
 
       {isAdmin ? (
-        /* Admin table */
-        <div className="dr-admin-table-wrap">
-          <table className="dr-admin-table">
-            <thead>
-              <tr>
-                <th>PELAAJA</th>
-                {days.map((d) => <th key={d.idx} className={cls(d.idx===selIdx&&'sel-col', d.idx>=10&&'playoff-col')}>{d.wd}<br/><span style={{fontSize:10,fontWeight:400}}>{d.date}</span></th>)}
-                <th>YHT.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allPlayers.map(p => {
-                const myRows = dailyStats.filter(r => r.player_id === p.key);
-                const total = myRows.reduce((acc,r) => acc+r.buukit,0);
-                return (
-                  <tr key={p.key}>
-                    <td className="player-cell">
-                      <span className="init-badge" style={{background:'var(--red)',color:'#fff',padding:'1px 5px',fontSize:11,fontWeight:700,borderRadius:2,marginRight:5}}>{p.init}</span>
-                      {p.nick}<span style={{color:'var(--ink-3)',fontSize:11,marginLeft:4}}>{p.city}</span>
-                    </td>
-                    {days.map((d) => {
-                      const dk = weekdayIndexToDateKey(d.idx);
-                      const row = myRows.find(r => r.date_key === dk);
-                      const b = row ? row.buukit : 0;
-                      const l = row ? row.luurit : 0;
-                      const v = row ? row.vastatut : 0;
-                      return (
-                        <td key={d.idx} className={cls('stat-cell', d.idx===selIdx&&'sel-col', b>0&&'has-data', d.idx>=10&&'playoff-col')}>
-                          {l>0||v>0||b>0 ? (
-                            <div className="day-cell-data">
-                              <div className="day-luuri">L:{l}</div>
-                              <div className="day-vast">V:{v}</div>
-                              <div className="day-book">{b}bk</div>
-                            </div>
-                          ) : <span style={{color:'var(--ink-4)'}}>—</span>}
-                        </td>
-                      );
-                    })}
-                    <td className="total-cell">{total}</td>
+        /* Tiimiraportti: pelaajakohtaiset summat jaksolta + laajennettava päiväerittely */
+        (() => {
+          const inR = (dk) => dk >= teamRange.startKey && dk <= teamRange.endKey;
+          const sum = (arr, f) => arr.reduce((a, r) => a + (Number(r[f]) || 0), 0);
+          const teamRows = allPlayers.filter(p => p.key !== ADMIN_KEY && !p.is_admin).map(p => {
+            const myDaily = dailyStats.filter(r => r.player_id === p.key && inR(r.date_key)).slice().sort((a, b) => a.date_key.localeCompare(b.date_key));
+            const myDeals = (deals || []).filter(d => d.player_id === p.key && inR(d.date_key)).slice().sort((a, b) => (a.signed_date || a.date_key).localeCompare(b.signed_date || b.date_key));
+            return {
+              ...p,
+              luurit: sum(myDaily, 'luurit'), vastatut: sum(myDaily, 'vastatut'), buukit: sum(myDaily, 'buukit'), tapaamiset: sum(myDaily, 'tapaamiset'),
+              dealsCount: myDeals.length, megisTotal: sum(myDeals, 'megis'), eurTotal: sum(myDeals, 'eurot'),
+              _daily: myDaily, _deals: myDeals,
+            };
+          }).sort((a, b) => b.buukit - a.buukit);
+          return (
+            <div className="dr-admin-table-wrap">
+              <table className="dash-table team-table">
+                <thead>
+                  <tr>
+                    <th className="dt-player">Pelaaja</th>
+                    <th className="dt-num">Lähteneet</th><th className="dt-num">Vastatut</th><th className="dt-num">Buukit</th>
+                    <th className="dt-num">Tapaamiset</th><th className="dt-num">Kaupat</th><th className="dt-num">Megis</th><th className="dt-num">€</th>
+                    <th className="dt-num"></th>
                   </tr>
-                );
-              })}
-              {/* Totals row */}
-              <tr className="totals-row">
-                <td>YHTEENSÄ</td>
-                {days.map((d,i) => {
-                  const dk = weekdayIndexToDateKey(i);
-                  const total = dailyStats.filter(r=>r.date_key===dk).reduce((acc,r)=>acc+r.buukit,0);
-                  return <td key={i} className={cls(i===selIdx&&'sel-col')}>{total>0?total:'—'}</td>;
-                })}
-                <td>{dailyStats.reduce((acc,r)=>acc+r.buukit,0)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {teamRows.length === 0 && <tr><td colSpan={9} className="dt-empty">Ei dataa tälle ajanjaksolle.</td></tr>}
+                  {teamRows.map(p => (
+                    <React.Fragment key={p.key}>
+                      <tr className={cls(expandedKey === p.key && 'dt-me')}>
+                        <td className="dt-player"><span className="dt-avatar">{p.init}</span><span className="dt-nick">{p.nick}</span><span className="dt-city">{(p.city || '').toUpperCase()}</span></td>
+                        <td className="dt-num">{p.luurit}</td><td className="dt-num">{p.vastatut}</td><td className="dt-num">{p.buukit}</td>
+                        <td className="dt-num">{p.tapaamiset}</td><td className="dt-num">{p.dealsCount}</td><td className="dt-num">{Math.round(p.megisTotal)}</td><td className="dt-num">{Math.round(p.eurTotal)}</td>
+                        <td className="dt-num">
+                          <button className="team-expand-btn" onClick={() => setExpandedKey(expandedKey === p.key ? null : p.key)}>
+                            {expandedKey === p.key ? '▲ Sulje' : '▼ Päivät'}
+                          </button>
+                        </td>
+                      </tr>
+                      {expandedKey === p.key && (
+                        <tr className="team-detail-row">
+                          <td colSpan={9}>
+                            <div className="team-detail">
+                              <div className="team-detail-col">
+                                <div className="team-detail-h">Päivät</div>
+                                {p._daily.length === 0 ? <div className="team-detail-empty">—</div> : p._daily.map(r => (
+                                  <div key={r.date_key} className="team-detail-row-item">
+                                    <span>{r.date_key}</span>
+                                    <span>L:{r.luurit || 0} · V:{r.vastatut || 0} · {r.buukit || 0}bk · T:{r.tapaamiset || 0}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="team-detail-col">
+                                <div className="team-detail-h">Kaupat</div>
+                                {p._deals.length === 0 ? <div className="team-detail-empty">—</div> : p._deals.map(d => (
+                                  <div key={d.id} className="team-detail-row-item">
+                                    <span>{d.signed_date || d.date_key} · {d.toimiala || '—'}</span>
+                                    <span>{d.megis} Megis · {Math.round(d.eurot)} €</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()
       ) : (
         /* Player entry form */
         <div className="dr-form">
@@ -1881,6 +1946,7 @@ function App() {
   const [customStart, setCustomStart] = useState(() => localDateKey(new Date()));
   const [customEnd, setCustomEnd] = useState(() => localDateKey(new Date()));
   const [rankBy, setRankBy] = useState('buukit'); // buukit | megis | eurot | tapaamiset
+  const [dealModalOpen, setDealModalOpen] = useState(false); // etusivun kauppamodaali
 
   // DB init + realtime subscribe
   const playersMapRef = useRef({});
@@ -2528,7 +2594,10 @@ function App() {
       <div className="main">
         <div>
           <MyCard me={me} onAction={performAction} />
-          <PeriodBar periodKind={periodKind} onKind={setPeriodKind} customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} label={periodInfo.label} />
+          <div className="lb-toolbar">
+            <PeriodBar periodKind={periodKind} onKind={setPeriodKind} customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} label={periodInfo.label} />
+            <button className="add-deal-cta" onClick={() => setDealModalOpen(true)}>➕ Lisää kauppa</button>
+          </div>
           <RankTabs rankBy={rankBy} onRankBy={setRankBy} />
           <DashboardTable rows={periodPlayers} rankBy={rankBy} onSelect={(p) => setSelectedKey(p.key)} meKey={currentKey} />
         </div>
@@ -2548,6 +2617,7 @@ function App() {
         onClose={() => setSelectedKey(null)}
         onAction={performAction}
       />
+      {dealModalOpen && <DealModal onAdd={handleAddDeal} onClose={() => setDealModalOpen(false)} />}
       <FloatPlus instances={floats} />
       <Confetti trigger={confettiKey} />
       <TweaksUI t={t} setTweak={setTweak} onResetAll={handleResetAll} isAdmin={false} />
