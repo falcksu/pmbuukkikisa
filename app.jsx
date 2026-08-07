@@ -1655,6 +1655,9 @@ function TabNav({ active, onChange, isAdmin }) {
       <button className={cls('tab-btn', active === 'report' && 'active')} onClick={() => onChange('report')}>
         📊 {isAdmin ? 'PÄIVÄRAPORTTI' : 'OMA RAPORTTI'}
       </button>
+      <button className={cls('tab-btn', active === 'hof' && 'active')} onClick={() => onChange('hof')}>
+        🏛️ HALL OF FAME
+      </button>
       <button className={cls('tab-btn', active === 'archive' && 'active')} onClick={() => onChange('archive')}>
         🏆 ARKISTO
       </button>
@@ -1999,6 +2002,53 @@ function GoalAdmin({ current, label, onSave }) {
   );
 }
 
+// Hall of Fame (D4)
+const HOF_MONTH_NAMES = ['tammikuu', 'helmikuu', 'maaliskuu', 'huhtikuu', 'toukokuu', 'kesäkuu', 'heinäkuu', 'elokuu', 'syyskuu', 'lokakuu', 'marraskuu', 'joulukuu'];
+function HallOfFame({ data, champion }) {
+  const { records, monthlyMvps } = data;
+  const monthLbl = (m) => { const [y, mo] = m.split('-'); return `${HOF_MONTH_NAMES[parseInt(mo, 10) - 1]} ${y}`; };
+  return (
+    <div className="hof">
+      <div className="hof-title">🏛️ HALL OF FAME</div>
+      {champion && (
+        <div className="hof-champ">
+          <span className="hof-champ-ico">🥇</span>
+          <div>
+            <div className="hof-champ-lbl">KAUSIVOITTAJA · KAUSI 1</div>
+            <div className="hof-champ-nick">{champion}</div>
+          </div>
+        </div>
+      )}
+      <div className="hof-section-label">🏆 ENNÄTYKSET (ALL-TIME)</div>
+      <div className="hof-records">
+        {records.map(r => (
+          <div key={r.id} className="hof-rec">
+            <span className="hof-rec-ico">{r.icon}</span>
+            <div className="hof-rec-body">
+              <div className="hof-rec-label">{r.label}</div>
+              <div className="hof-rec-holder"><strong>{r.nick}</strong>{r.value > 0 ? ` · ${r.value} ${r.sub}` : ''}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hof-section-label">👑 KUUKAUSI-MVP:T</div>
+      {monthlyMvps.length === 0 ? (
+        <div className="hof-empty">Ei vielä kuukausidataa.</div>
+      ) : (
+        <div className="hof-mvps">
+          {monthlyMvps.map(m => (
+            <div key={m.month} className="hof-mvp">
+              <span className="hof-mvp-month">{monthLbl(m.month)}</span>
+              <span className="hof-mvp-nick">👑 {m.nick}</span>
+              <span className="hof-mvp-buukit">{m.buukit} bk</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // H2H-haaste — viikon duelli (D3)
 function H2HCard({ stand }) {
   if (!stand) return null;
@@ -2304,6 +2354,9 @@ function App() {
 
   // H2H-haaste (D3)
   const h2hStand = useMemo(() => h2hStanding(h2h, dailyStats, playersMap), [h2h, dailyStats, playersMap]);
+
+  // Hall of Fame (D4)
+  const hofData = useMemo(() => hallOfFame(dailyStats, deals, playersMap), [dailyStats, deals, playersMap]);
   const handleSaveH2H = useCallback((a, b) => {
     const next = (a && b && a !== b) ? { a, b } : null;
     h2hRef.current = next;
@@ -2705,6 +2758,8 @@ function App() {
         <TabNav active={activeTab} onChange={setActiveTab} isAdmin />
         {activeTab === 'report' || activeTab === 'teamreport' ? (
           <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sorted.filter(p => p.key !== ADMIN_KEY)} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
+        ) : activeTab === 'hof' ? (
+          <HallOfFame data={hofData} champion={champion ? champion.nick : null} />
         ) : activeTab === 'archive' ? (
           <div className="main">
             <div>
@@ -2772,6 +2827,8 @@ function App() {
         <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sortedPublic} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
       ) : activeTab === 'report' ? (
         <DailyReport currentKey={currentKey} isAdmin={false} dailyStats={dailyStats} players={sorted} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
+      ) : activeTab === 'hof' ? (
+        <HallOfFame data={hofData} champion={champion ? champion.nick : null} />
       ) : activeTab === 'archive' ? (
         <div className="main">
           <div>

@@ -2706,3 +2706,25 @@ body { font-size: 14px; }
 .h2h-admin-row button:hover:not(:disabled) { background: var(--accent); }
 .h2h-admin-row button:disabled { opacity: .5; cursor: default; }
 .h2h-admin-clear { background: var(--bg-3) !important; color: var(--ink-2) !important; }
+
+/* Hall of Fame (D4) */
+.hof { max-width: 860px; margin: 0 auto; }
+.hof-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 28px; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 18px; }
+.hof-champ { display: flex; align-items: center; gap: 16px; background: linear-gradient(135deg, rgba(197,151,42,.14), var(--bg-2)); border: 1px solid var(--gold, #c5972a); border-radius: 14px; padding: 18px 20px; margin-bottom: 22px; }
+.hof-champ-ico { font-size: 40px; }
+.hof-champ-lbl { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: .1em; color: var(--gold, #c5972a); }
+.hof-champ-nick { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 26px; letter-spacing: .04em; text-transform: uppercase; }
+.hof-section-label { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: .08em; color: var(--ink-3); margin: 20px 0 12px; }
+.hof-records { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.hof-rec { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: 10px; padding: 12px 14px; }
+.hof-rec-ico { font-size: 26px; line-height: 1; }
+.hof-rec-body { min-width: 0; }
+.hof-rec-label { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+.hof-rec-holder { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--ink); }
+.hof-rec-holder strong { color: var(--accent); }
+.hof-mvps { display: flex; flex-direction: column; gap: 4px; }
+.hof-mvp { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; }
+.hof-mvp-month { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; text-transform: capitalize; }
+.hof-mvp-nick { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 14px; }
+.hof-mvp-buukit { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); font-weight: 700; }
+.hof-empty { font-size: 13px; color: var(--ink-4); font-style: italic; }
