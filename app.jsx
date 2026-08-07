@@ -2628,7 +2628,6 @@ function App() {
           </div>
           <div className="side">
             {t.showPodium && <Podium sorted={periodPlayers} onSelect={(p) => setSelectedKey(p.key)} />}
-            <PrizeBanner />
           </div>
         </div>
         )}
@@ -2694,7 +2693,6 @@ function App() {
         </div>
         <div className="side">
           {t.showPodium && <Podium sorted={periodPlayers} onSelect={(p) => setSelectedKey(p.key)} />}
-          <PrizeBanner />
         </div>
       </div>
       )}
