@@ -341,6 +341,39 @@ function resetPlayout() {
   return { ...EMPTY_PLAYOUT };
 }
 
+// ── Live-syöte (tiimin tapahtumat tickeriin) ────────────────────────────
+// Rakentaa jaetusta datasta (kaupat + päivän buukit) uusimmat-ensin -syötteen.
+function buildTickerFeed(dailyStats, deals, playersMap, limit) {
+  limit = limit || 20;
+  const nickOf = (pid) => (playersMap && playersMap[pid] && playersMap[pid].nick) || pid;
+  const hhmm = (ts) => {
+    const d = new Date(ts);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  };
+  const ddmm = (dk) => (dk ? dk.slice(8, 10) + '.' + dk.slice(5, 7) + '.' : '');
+  const items = [];
+  (deals || []).forEach(d => {
+    const ts = d.created_at ? new Date(d.created_at).getTime()
+      : (d.signed_date ? new Date(d.signed_date + 'T12:00:00').getTime()
+      : (d.date_key ? new Date(d.date_key + 'T12:00:00').getTime() : 0));
+    items.push({
+      id: 'd-' + d.id, ts, kind: 'deal', nick: nickOf(d.player_id), accent: true,
+      note: `KAUPPA ${d.megis || 0} Megis${d.toimiala ? ' · ' + d.toimiala : ''}`,
+    });
+  });
+  (dailyStats || []).forEach(r => {
+    if ((r.buukit || 0) <= 0) return;
+    const ts = r.updated_at ? new Date(r.updated_at).getTime()
+      : (r.date_key ? new Date(r.date_key + 'T18:00:00').getTime() : 0);
+    items.push({
+      id: 'b-' + r.player_id + '-' + r.date_key, ts, kind: 'buukit', nick: nickOf(r.player_id), accent: false,
+      note: `${r.buukit} buukkia · ${ddmm(r.date_key)}`,
+    });
+  });
+  items.sort((a, b) => b.ts - a.ts);
+  return items.slice(0, limit).map(it => ({ ...it, time: it.ts ? hhmm(it.ts) : '' }));
+}
+
 // ── Tiimitavoite (osaprojekti D1) ────────────────────────────
 // Kuukausitavoitteen edistyminen. Palauttaa {pct,remaining,daysLeft,neededPerDay,hit,target,current}.
 function monthProgress(target, current, refDate) {
@@ -431,7 +464,7 @@ function validateRegForm(f) {
 Object.assign(window, {
   COMPETITION,
   resolveAuthGate, validateEmail, validateRegForm,
-  periodRange, aggregatePlayersForPeriod, monthProgress,
+  periodRange, aggregatePlayersForPeriod, monthProgress, buildTickerFeed,
   LS_CURRENT,
   playerKey, emptyStats,
   loadCurrentKey, saveCurrentKey,

@@ -313,7 +313,7 @@ function Ticker({ items, paused }) {
       <div className="ticker-track">
         {items.length === 0 ? (
           <div style={{ color: 'rgba(245,243,238,.55)', fontSize: 13, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '.08em' }}>
-            Ei vielä toimintaa — kirjaa ensimmäinen buukki kortistasi
+            Ei vielä toimintaa — tiimin buukit ja kaupat näkyvät tässä
           </div>
         ) : (
           <div className={cls('ticker-content', paused && 'paused')} style={{ animationDuration: `${dur}s` }}>
@@ -1971,7 +1971,7 @@ function App() {
 
   // UI state
   const [selectedKey, setSelectedKey] = useState(null);
-  const [tickerItems, setTickerItems] = useState([]);
+  const [tickerItems, setTickerItems] = useState([]); // (deprecated: korvattu johdetulla tickerFeed:llä; jätetään ettei rikota vanhoja kutsuja)
   const [confettiKey, setConfettiKey] = useState(0);
   const [flashKey, setFlashKey] = useState(null);
   const [floats, setFloats] = useState([]);
@@ -2168,6 +2168,12 @@ function App() {
     arr.sort((a, b) => ((b[metric] || 0) - (a[metric] || 0)) || ((b.buukit || 0) - (a.buukit || 0)));
     return arr.map((p, i) => ({ ...p, rank: i + 1 }));
   }, [playersMap, dailyStats, deals, periodInfo, rankBy]);
+
+  // Live-syöte tickeriin: johdetaan jaetusta datasta (realtime), näkyy kaikille, säilyy latausten yli
+  const tickerFeed = useMemo(
+    () => buildTickerFeed(dailyStats, deals, playersMap, 20),
+    [dailyStats, deals, playersMap]
+  );
 
   // Tiimitavoite (D1): kuluvan kuukauden edistyminen
   const monthKey = localDateKey(new Date()).slice(0, 7);
@@ -2569,7 +2575,7 @@ function App() {
     return (
       <div className="app">
         <Header me={me} onLogout={handleLogout} playerCount={sorted.length} isAdmin today={today} dbBackend={dbBackend} />
-        {t.showTicker && <Ticker items={tickerItems} paused={!t.pulse} />}
+        {t.showTicker && <Ticker items={tickerFeed} paused={!t.pulse} />}
         <TabNav active={activeTab} onChange={setActiveTab} isAdmin />
         {activeTab === 'report' || activeTab === 'teamreport' ? (
           <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sorted.filter(p => p.key !== ADMIN_KEY)} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
@@ -2630,7 +2636,7 @@ function App() {
   return (
     <div className="app">
       <Header me={me} onLogout={handleLogout} playerCount={sortedPublic.length} today={today} dbBackend={dbBackend} />
-      {t.showTicker && <Ticker items={tickerItems} paused={!t.pulse} />}
+      {t.showTicker && <Ticker items={tickerFeed} paused={!t.pulse} />}
       <TabNav active={activeTab} onChange={setActiveTab} isAdmin={false} />
       {activeTab === 'teamreport' ? (
         <DailyReport currentKey={currentKey} isAdmin dailyStats={dailyStats} players={sortedPublic} onSaveDay={handleSaveDay} deals={deals} onAddDeal={handleAddDeal} onDeleteDeal={handleDeleteDeal} />
