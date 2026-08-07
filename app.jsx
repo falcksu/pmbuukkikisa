@@ -2382,65 +2382,50 @@ function App() {
   // ── Actions for current user ───────────────────
   const performAction = useCallback((kind, rect) => {
     if (!currentKey || currentKey === ADMIN_KEY || isAdminRef.current) return;
-    let minus = kind === '-buukki';
+    const minus = kind === '-buukki';
+    // Laske uusi tila SYNKRONISESTI (ei setState-updaterin sisällä), jotta
+    // sivuvaikutukset (ticker, DB) näkevät oikeat arvot heti.
+    const cur = playersMapRef.current[currentKey];
+    if (!cur) return;
+    const next = { ...cur, lastSeen: Date.now() };
     let resultingNote = null;
-    let didCrossPlayoff = false;
-    let updatedPlayer = null;
 
-    setPlayersMap((prev) => {
-      const cur = prev[currentKey];
-      if (!cur) return prev;
-      const next = { ...cur, lastSeen: Date.now() };
+    if (kind === 'luuri') {
+      next.luurit = cur.luurit + 1;
+    } else if (kind === 'vastattu') {
+      if (cur.vastatut >= cur.luurit) return;
+      next.vastatut = cur.vastatut + 1;
+    } else if (kind === 'buukki') {
+      if (cur.buukit >= cur.vastatut) return;
+      next.buukit = cur.buukit + 1;
+      const slot = Math.max(0, Math.min(4, currentWeekdayIndex() % 5));
+      const newLast5 = [...cur.last5];
+      newLast5[slot] = (newLast5[slot] || 0) + 1;
+      next.last5 = newLast5;
+      if ((cur.last5[slot] || 0) === 0) next.streak = cur.streak + 1;
+      next.trendN = Math.max(cur.trendN, 0) + 1;
+      resultingNote = `BUUKKI #${next.buukit}`;
+    } else if (kind === '-buukki') {
+      if (cur.buukit <= 0) return;
+      next.buukit = cur.buukit - 1;
+      const slot = Math.max(0, Math.min(4, currentWeekdayIndex() % 5));
+      const newLast5 = [...cur.last5];
+      newLast5[slot] = Math.max(0, (newLast5[slot] || 0) - 1);
+      next.last5 = newLast5;
+      if (newLast5[slot] === 0 && (cur.last5[slot] || 0) === 1) next.streak = Math.max(0, cur.streak - 1);
+      next.trendN = Math.min(cur.trendN, 0) - 1;
+      resultingNote = 'BUUKKI PERUTTU';
+    } else if (kind === 'tapaaminen') {
+      next.tapaamiset = (cur.tapaamiset || 0) + 1;
+      resultingNote = `TAPAAMINEN #${next.tapaamiset}`;
+    } else {
+      return;
+    }
 
-      if (kind === 'luuri') {
-        next.luurit = cur.luurit + 1;
-      } else if (kind === 'vastattu') {
-        if (cur.vastatut >= cur.luurit) return prev;
-        next.vastatut = cur.vastatut + 1;
-      } else if (kind === 'buukki') {
-        if (cur.buukit >= cur.vastatut) return prev;
-        next.buukit = cur.buukit + 1;
-        const slot = Math.max(0, Math.min(4, currentWeekdayIndex() % 5));
-        const newLast5 = [...cur.last5];
-        newLast5[slot] = (newLast5[slot] || 0) + 1;
-        next.last5 = newLast5;
-        if ((cur.last5[slot] || 0) === 0) next.streak = cur.streak + 1;
-        next.trendN = Math.max(cur.trendN, 0) + 1;
-        resultingNote = `BUUKKI #${next.buukit}`;
-      } else if (kind === '-buukki') {
-        if (cur.buukit <= 0) return prev;
-        next.buukit = cur.buukit - 1;
-        const slot = Math.max(0, Math.min(4, currentWeekdayIndex() % 5));
-        const newLast5 = [...cur.last5];
-        newLast5[slot] = Math.max(0, (newLast5[slot] || 0) - 1);
-        next.last5 = newLast5;
-        if (newLast5[slot] === 0 && (cur.last5[slot] || 0) === 1) {
-          next.streak = Math.max(0, cur.streak - 1);
-        }
-        next.trendN = Math.min(cur.trendN, 0) - 1;
-        resultingNote = 'BUUKKI PERUTTU';
-      } else if (kind === 'tapaaminen') {
-        next.tapaamiset = (cur.tapaamiset || 0) + 1;
-        resultingNote = `TAPAAMINEN #${next.tapaamiset}`;
-      }
-
-      // Detect playoff crossing
-      const allArr = Object.values(prev);
-      const newAllArr = allArr.filter(p => p !== cur).concat([next]);
-      const before = [...allArr].sort((a,b) => b.buukit - a.buukit);
-      const after  = [...newAllArr].sort((a,b) => b.buukit - a.buukit);
-      const beforeRank = before.findIndex(p => p === cur) + 1 || before.findIndex(p => p.nick === cur.nick && p.city === cur.city) + 1;
-      const afterRank  = after.findIndex(p => p === next) + 1;
-      if (allArr.length >= 9 && beforeRank > 8 && afterRank <= 8 && kind === 'buukki') {
-        didCrossPlayoff = true;
-      }
-
-      updatedPlayer = next;
-      return { ...prev, [currentKey]: next };
-    });
-
-    // Sync to DB (fire-and-forget)
-    if (updatedPlayer) DB.upsertPlayer(updatedPlayer);
+    // Aseta pelaajatila + synkronoi ref
+    playersMapRef.current = { ...playersMapRef.current, [currentKey]: next };
+    setPlayersMap((prev) => ({ ...prev, [currentKey]: next }));
+    DB.upsertPlayer(next);
 
     // Also update daily_stats for today (fire-and-forget)
     // Kirjaa aina oikealle kalenteripäivälle (ei kisakalenteriin)
@@ -2474,18 +2459,12 @@ function App() {
     if (resultingNote) {
       const now = new Date();
       const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const meNow = playersMap[currentKey];
-      const nick = meNow ? meNow.nick : 'PELAAJA';
       setTickerItems((items) => [
-        { id: `tx-${Date.now()}`, nick, time, note: resultingNote, accent: kind === 'buukki' },
+        { id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, nick: next.nick, time, note: resultingNote, accent: kind === 'buukki' },
         ...items.slice(0, 24),
       ]);
     }
-
-    if (didCrossPlayoff && t.confetti) {
-      setConfettiKey((k) => k + 1);
-    }
-  }, [currentKey, playersMap, t.confetti]);
+  }, [currentKey]);
 
   // Tallenna päiväraportti-rivi ja päivitä pelaajan kokonaistilasto
   const handleAddDeal = useCallback(async ({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount }) => {
