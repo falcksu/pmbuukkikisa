@@ -1054,22 +1054,14 @@ function BadgeProfile({ tier, badges }) {
       </div>
       <div className="bp-section-label">SAAVUTUKSET · {earned.length}/{badges.length}</div>
       <div className="bp-grid">
-        {earned.map(b => (
-          <div key={b.id} className="bp-badge earned" title={b.desc}>
-            <span className="bp-ico">{b.icon}</span>
+        {[...earned, ...locked].map(b => (
+          <div key={b.id} className={cls('bp-badge', b.earned ? 'earned' : 'locked', 'bp-cat-' + b.cat)} title={b.desc}>
+            <div className="bp-medal" style={{ '--pct': (b.earned ? 100 : (b.pct || 0)) + '%' }}>
+              <div className="bp-medal-disc"><span className="bp-ico">{b.icon}</span></div>
+              {b.earned && <span className="bp-check">✓</span>}
+            </div>
             <span className="bp-name">{b.name}</span>
-          </div>
-        ))}
-        {locked.map(b => (
-          <div key={b.id} className="bp-badge locked" title={b.desc}>
-            <span className="bp-ico">{b.icon}</span>
-            <span className="bp-name">{b.name}</span>
-            {b.progress && (
-              <div className="bp-prog">
-                <div className="bp-prog-bar"><div className="bp-prog-fill" style={{ width: Math.min(100, Math.round(b.progress.cur / b.progress.target * 100)) + '%' }} /></div>
-                <span className="bp-prog-txt">{b.progress.cur}/{b.progress.target}</span>
-              </div>
-            )}
+            {!b.earned && b.progress && <span className="bp-prog-txt">{b.progress.cur}/{b.progress.target}</span>}
           </div>
         ))}
       </div>

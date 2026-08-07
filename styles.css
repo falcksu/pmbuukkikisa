@@ -2673,17 +2673,41 @@ body { font-size: 14px; }
 .bp-platinum .bp-tier-name, .mc-tier.bp-platinum { color: #2a6a9a; background: rgba(74,144,196,.15); }
 .bp-legend .bp-tier-name, .mc-tier.bp-legend { color: #5c2d9a; background: rgba(124,77,191,.15); }
 .bp-section-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .1em; color: var(--ink-4); text-transform: uppercase; margin-bottom: 10px; }
-.bp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
-.bp-badge { border: 1px solid var(--line); border-radius: 10px; padding: 10px 8px; text-align: center; background: #fff; }
-.bp-badge.earned { border-color: var(--green, #1a8a3e); border-top-width: 3px; }
-.bp-badge.locked { background: var(--bg-2); opacity: .8; }
-.bp-badge.locked .bp-ico { filter: grayscale(.6); opacity: .6; }
-.bp-ico { font-size: 22px; line-height: 1; display: block; margin-bottom: 5px; }
-.bp-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: .02em; line-height: 1.15; color: var(--ink); display: block; }
-.bp-prog { margin-top: 7px; display: flex; align-items: center; gap: 5px; }
-.bp-prog-bar { flex: 1; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
-.bp-prog-fill { height: 100%; background: var(--accent); border-radius: 2px; }
-.bp-prog-txt { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--ink-4); white-space: nowrap; }
+.bp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.bp-badge {
+  border: 1px solid var(--line); border-radius: 14px; padding: 14px 8px 12px; text-align: center;
+  background: #fff; transition: transform .14s ease, box-shadow .14s ease;
+  --medal: var(--accent); --medal-glow: rgba(255,74,26,.32); --disc: linear-gradient(160deg, #ff9a5c, var(--accent));
+}
+.bp-badge.earned { box-shadow: 0 3px 12px rgba(0,0,0,.06); }
+.bp-badge.earned:hover { transform: translateY(-3px); box-shadow: 0 8px 22px rgba(0,0,0,.12); }
+.bp-badge.locked { background: var(--bg-2); }
+/* Mitali */
+.bp-medal { position: relative; width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 9px; display: grid; place-items: center; }
+.bp-badge.earned .bp-medal { background: var(--medal); box-shadow: 0 0 0 1px rgba(0,0,0,.05), 0 5px 16px var(--medal-glow); }
+.bp-badge.locked .bp-medal { background: conic-gradient(var(--medal) var(--pct, 0%), var(--bg-3) 0); }
+.bp-medal-disc {
+  width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 34% 28%, rgba(255,255,255,.55), transparent 58%), var(--disc);
+}
+.bp-badge.locked .bp-medal-disc { background: var(--bg); }
+.bp-ico { font-size: 25px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
+.bp-badge.locked .bp-ico { filter: grayscale(1); opacity: .4; }
+.bp-check {
+  position: absolute; bottom: -1px; right: -1px; width: 21px; height: 21px; border-radius: 50%;
+  background: var(--green, #1a8a3e); color: #fff; font-size: 12px; font-weight: 700;
+  display: grid; place-items: center; border: 2px solid #fff;
+}
+.bp-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: .02em; line-height: 1.15; color: var(--ink); display: block; text-transform: uppercase; }
+.bp-badge.locked .bp-name { color: var(--ink-3); }
+.bp-prog-txt { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-4); white-space: nowrap; margin-top: 4px; display: block; }
+/* Kategoriavärit */
+.bp-cat-buukit { --medal:#ff6a2a; --medal-glow:rgba(255,106,42,.35); --disc:linear-gradient(160deg,#ff9a5c,#ff5a1a); }
+.bp-cat-day    { --medal:#e2492a; --medal-glow:rgba(226,73,42,.35); --disc:linear-gradient(160deg,#ff7a4a,#d43a1a); }
+.bp-cat-streak { --medal:#7c4dbf; --medal-glow:rgba(124,77,191,.35); --disc:linear-gradient(160deg,#a06fd6,#6c3daf); }
+.bp-cat-aim    { --medal:#1a8a3e; --medal-glow:rgba(26,138,62,.35); --disc:linear-gradient(160deg,#4bd07a,#159a4a); }
+.bp-cat-deal   { --medal:#2a6a9a; --medal-glow:rgba(42,106,154,.35); --disc:linear-gradient(160deg,#5a9ad0,#1a5a94); }
+.bp-cat-champ  { --medal:#c5972a; --medal-glow:rgba(197,151,42,.42); --disc:linear-gradient(160deg,#e8c96a,#b5820f); }
 
 /* H2H-haaste (D3) */
 .h2h-card { background: var(--bg-2); border: 2px solid var(--ink); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; text-align: center; }

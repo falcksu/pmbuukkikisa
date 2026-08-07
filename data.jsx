@@ -461,9 +461,15 @@ function computeBadges(playerKey, dailyStats, deals, opts) {
   const totalMegis = sum(myDeals, 'megis');
   const buukkiPct = totalVastatut > 0 ? Math.round(totalBuukit / totalVastatut * 100) : 0;
 
+  const CATS = {
+    first_buukki: 'buukit', month_pace: 'buukit', hundred: 'buukit', year_pace: 'buukit',
+    tulipallo: 'day', superpaiva: 'day', streak5: 'streak', sharpshooter: 'aim',
+    first_deal: 'deal', kauppakone: 'deal', iso_kauppa: 'deal', megis_master: 'deal', month_champ: 'champ',
+  };
   const B = (id, icon, name, desc, earned, cur, target) => ({
-    id, icon, name, desc, earned: !!earned,
+    id, icon, name, desc, cat: CATS[id] || 'buukit', earned: !!earned,
     progress: (!earned && target) ? { cur: Math.min(cur, target), target } : null,
+    pct: target ? Math.min(100, Math.round((Math.min(cur, target) / target) * 100)) : (earned ? 100 : 0),
   });
   return [
     B('first_buukki', '🎯', 'Ensimmäinen buukki', 'Kirjaa 1 buukki', totalBuukit >= 1, totalBuukit, 1),
