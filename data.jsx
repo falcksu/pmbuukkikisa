@@ -341,6 +341,74 @@ function resetPlayout() {
   return { ...EMPTY_PLAYOUT };
 }
 
+// ── Badget & tier (osaprojekti D2) ────────────────────────────
+// Tier kaikkien aikojen buukkien mukaan (kalibroitu: ~20 buukkia/kk/pelaaja).
+const BADGE_TIERS = [
+  { key: 'bronze',   name: 'Bronze',   icon: '🥉', min: 0 },
+  { key: 'silver',   name: 'Silver',   icon: '🥈', min: 40 },
+  { key: 'gold',     name: 'Gold',     icon: '🥇', min: 120 },
+  { key: 'platinum', name: 'Platinum', icon: '💠', min: 240 },
+  { key: 'legend',   name: 'Legend',   icon: '💎', min: 480 },
+];
+function playerTier(totalBuukit) {
+  const b = Number(totalBuukit) || 0;
+  let idx = 0;
+  for (let i = 0; i < BADGE_TIERS.length; i++) { if (b >= BADGE_TIERS[i].min) idx = i; }
+  const tier = BADGE_TIERS[idx];
+  const next = BADGE_TIERS[idx + 1] || null;
+  const progressPct = next ? Math.min(100, Math.round((b - tier.min) / (next.min - tier.min) * 100)) : 100;
+  const toNext = next ? Math.max(0, next.min - b) : 0;
+  return { tier, next, progressPct, toNext, total: b };
+}
+
+function longestBuukitStreak(myDaily) {
+  const days = myDaily.filter(r => (r.buukit || 0) > 0).map(r => r.date_key).sort();
+  let best = 0, cur = 0, prev = null;
+  for (const d of days) {
+    if (prev && Math.round((new Date(d + 'T00:00:00') - new Date(prev + 'T00:00:00')) / 86400000) === 1) cur++;
+    else cur = 1;
+    if (cur > best) best = cur;
+    prev = d;
+  }
+  return best;
+}
+
+// Laskee pelaajan badget jaetusta datasta. opts.isMonthChampion = eniten buukkeja kuluvassa kuussa.
+function computeBadges(playerKey, dailyStats, deals, opts) {
+  opts = opts || {};
+  const myDaily = (dailyStats || []).filter(r => r.player_id === playerKey);
+  const myDeals = (deals || []).filter(d => d.player_id === playerKey);
+  const sum = (arr, f) => arr.reduce((a, r) => a + (Number(r[f]) || 0), 0);
+  const totalBuukit = sum(myDaily, 'buukit');
+  const totalVastatut = sum(myDaily, 'vastatut');
+  const maxDay = myDaily.reduce((m, r) => Math.max(m, r.buukit || 0), 0);
+  const streak = longestBuukitStreak(myDaily);
+  const dealsCount = myDeals.length;
+  const maxDealMegis = myDeals.reduce((m, d) => Math.max(m, Number(d.megis) || 0), 0);
+  const totalMegis = sum(myDeals, 'megis');
+  const buukkiPct = totalVastatut > 0 ? Math.round(totalBuukit / totalVastatut * 100) : 0;
+
+  const B = (id, icon, name, desc, earned, cur, target) => ({
+    id, icon, name, desc, earned: !!earned,
+    progress: (!earned && target) ? { cur: Math.min(cur, target), target } : null,
+  });
+  return [
+    B('first_buukki', '🎯', 'Ensimmäinen buukki', 'Kirjaa 1 buukki', totalBuukit >= 1, totalBuukit, 1),
+    B('month_pace', '📊', 'Kuukausivauhti', '20 buukkia (kk-tavoite)', totalBuukit >= 20, totalBuukit, 20),
+    B('hundred', '🏅', 'Satanen', '100 buukkia yhteensä', totalBuukit >= 100, totalBuukit, 100),
+    B('year_pace', '💎', 'Vuosivauhti', '240 buukkia (vuositavoite)', totalBuukit >= 240, totalBuukit, 240),
+    B('tulipallo', '🔥', 'Tulipallo', '5+ buukkia yhtenä päivänä', maxDay >= 5, maxDay, 5),
+    B('superpaiva', '🚀', 'Superpäivä', '8+ buukkia yhtenä päivänä', maxDay >= 8, maxDay, 8),
+    B('streak5', '🔄', 'Pitkä putki', 'Buukki 5 päivänä peräkkäin', streak >= 5, streak, 5),
+    B('sharpshooter', '🎯', 'Tarkka-ampuja', 'Buukki-% ≥ 50 (väh. 10 vastattua)', totalVastatut >= 10 && buukkiPct >= 50, buukkiPct, 50),
+    B('first_deal', '🤝', 'Ensimmäinen kauppa', 'Kirjaa 1 kauppa', dealsCount >= 1, dealsCount, 1),
+    B('kauppakone', '💼', 'Kauppakone', '10 kauppaa', dealsCount >= 10, dealsCount, 10),
+    B('iso_kauppa', '🐘', 'Iso kauppa', 'Yksittäinen kauppa ≥ 2000 Megis', maxDealMegis >= 2000, maxDealMegis, 2000),
+    B('megis_master', '⚡', 'Megis-mestari', '10 000 Megis yhteensä', totalMegis >= 10000, totalMegis, 10000),
+    B('month_champ', '👑', 'Kuukauden mestari', 'Eniten buukkeja kuluvassa kuussa', !!opts.isMonthChampion, 0, 0),
+  ];
+}
+
 // ── Live-syöte (tiimin tapahtumat tickeriin) ────────────────────────────
 // Rakentaa jaetusta datasta (kaupat + päivän buukit) uusimmat-ensin -syötteen.
 function buildTickerFeed(dailyStats, deals, playersMap, limit) {
@@ -465,6 +533,7 @@ Object.assign(window, {
   COMPETITION,
   resolveAuthGate, validateEmail, validateRegForm,
   periodRange, aggregatePlayersForPeriod, monthProgress, buildTickerFeed,
+  BADGE_TIERS, playerTier, computeBadges, longestBuukitStreak,
   LS_CURRENT,
   playerKey, emptyStats,
   loadCurrentKey, saveCurrentKey,
