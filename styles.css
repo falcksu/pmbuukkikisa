@@ -2655,3 +2655,32 @@ body { font-size: 14px; }
 .goal-admin-row input { width: 120px; }
 .goal-admin-row button { padding: 8px 14px; border: none; border-radius: 7px; background: var(--ink); color: #fff; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px; }
 .goal-admin-row button:hover { background: var(--accent); }
+
+/* Badget & tier (D2) */
+.mc-tier { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: .04em; padding: 2px 8px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+.badge-profile { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; }
+.bp-tier { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; background: var(--bg-2); border: 1px solid var(--line); margin-bottom: 16px; }
+.bp-tier-icon { font-size: 34px; line-height: 1; }
+.bp-tier-info { flex: 1; min-width: 0; }
+.bp-tier-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 20px; letter-spacing: .04em; }
+.bp-tier-sub { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-3); margin: 2px 0 8px; }
+.bp-tier-track { height: 8px; background: var(--bg-3); border-radius: 4px; overflow: hidden; }
+.bp-tier-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #ff8a5c); border-radius: 4px; transition: width .5s; }
+/* tier-värit */
+.bp-bronze { border-color: #a0684a55; } .bp-bronze .bp-tier-name, .mc-tier.bp-bronze { color: #a0684a; background: rgba(160,104,74,.12); }
+.bp-silver .bp-tier-name, .mc-tier.bp-silver { color: #5a7080; background: rgba(138,154,170,.15); }
+.bp-gold .bp-tier-name, .mc-tier.bp-gold { color: var(--gold, #c5972a); background: rgba(197,151,42,.15); }
+.bp-platinum .bp-tier-name, .mc-tier.bp-platinum { color: #2a6a9a; background: rgba(74,144,196,.15); }
+.bp-legend .bp-tier-name, .mc-tier.bp-legend { color: #5c2d9a; background: rgba(124,77,191,.15); }
+.bp-section-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .1em; color: var(--ink-4); text-transform: uppercase; margin-bottom: 10px; }
+.bp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.bp-badge { border: 1px solid var(--line); border-radius: 10px; padding: 10px 8px; text-align: center; background: #fff; }
+.bp-badge.earned { border-color: var(--green, #1a8a3e); border-top-width: 3px; }
+.bp-badge.locked { background: var(--bg-2); opacity: .8; }
+.bp-badge.locked .bp-ico { filter: grayscale(.6); opacity: .6; }
+.bp-ico { font-size: 22px; line-height: 1; display: block; margin-bottom: 5px; }
+.bp-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: .02em; line-height: 1.15; color: var(--ink); display: block; }
+.bp-prog { margin-top: 7px; display: flex; align-items: center; gap: 5px; }
+.bp-prog-bar { flex: 1; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+.bp-prog-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+.bp-prog-txt { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--ink-4); white-space: nowrap; }

@@ -337,6 +337,7 @@ function Ticker({ items, paused }) {
 function MyCard({ me, onAction }) {
   const vp = pct(me.vastatut, me.luurit);
   const bp = pct(me.buukit, me.vastatut);
+  const tier = playerTier(me.buukit);
   return (
     <div className="my-card">
       <div className="mc-top">
@@ -344,8 +345,8 @@ function MyCard({ me, onAction }) {
           <div className="mc-tag">● SINÄ</div>
           <div className="mc-avatar">{me.init}</div>
           <div className="mc-id">
-            <div className="nick">{me.nick}</div>
-            <div className="city">{me.city.toUpperCase()} · KAUSI 1</div>
+            <div className="nick">{me.nick} <span className={cls('mc-tier', 'bp-' + tier.tier.key)} title={`${tier.tier.name} · ${tier.total} buukkia`}>{tier.tier.icon} {tier.tier.name}</span></div>
+            <div className="city">{me.city.toUpperCase()}{tier.next ? ` · ${tier.toNext} → ${tier.next.name}` : ' · huipputaso'}</div>
           </div>
         </div>
         <div />
@@ -1034,7 +1035,49 @@ function AdminPanel({ players, onDelete, onResetAll }) {
 
 // ── Player modal ───────────────────────────
 
-function PlayerModal({ player, onClose, onAction, isMe, isAdmin, onDelete }) {
+// Badge- & tier-profiili (D2)
+function BadgeProfile({ tier, badges }) {
+  if (!tier) return null;
+  const earned = badges.filter(b => b.earned);
+  const locked = badges.filter(b => !b.earned);
+  return (
+    <div className="badge-profile">
+      <div className={cls('bp-tier', 'bp-' + tier.tier.key)}>
+        <span className="bp-tier-icon">{tier.tier.icon}</span>
+        <div className="bp-tier-info">
+          <div className="bp-tier-name">{tier.tier.name}</div>
+          <div className="bp-tier-sub">
+            {tier.total} buukkia{tier.next ? ` · ${tier.toNext} → ${tier.next.name}` : ' · huipputaso'}
+          </div>
+          <div className="bp-tier-track"><div className="bp-tier-fill" style={{ width: tier.progressPct + '%' }} /></div>
+        </div>
+      </div>
+      <div className="bp-section-label">SAAVUTUKSET · {earned.length}/{badges.length}</div>
+      <div className="bp-grid">
+        {earned.map(b => (
+          <div key={b.id} className="bp-badge earned" title={b.desc}>
+            <span className="bp-ico">{b.icon}</span>
+            <span className="bp-name">{b.name}</span>
+          </div>
+        ))}
+        {locked.map(b => (
+          <div key={b.id} className="bp-badge locked" title={b.desc}>
+            <span className="bp-ico">{b.icon}</span>
+            <span className="bp-name">{b.name}</span>
+            {b.progress && (
+              <div className="bp-prog">
+                <div className="bp-prog-bar"><div className="bp-prog-fill" style={{ width: Math.min(100, Math.round(b.progress.cur / b.progress.target * 100)) + '%' }} /></div>
+                <span className="bp-prog-txt">{b.progress.cur}/{b.progress.target}</span>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PlayerModal({ player, onClose, onAction, isMe, isAdmin, onDelete, tier, badges }) {
   if (!player) return null;
   const max = Math.max(...player.last5, 1);
   const peakIdx = player.last5.indexOf(max);
@@ -1115,6 +1158,7 @@ function PlayerModal({ player, onClose, onAction, isMe, isAdmin, onDelete }) {
             ))}
           </div>
         </div>
+        <BadgeProfile tier={tier} badges={badges} />
         {isMe ? (
           <div className="m-foot">
             <button className="alt" onClick={onClose}>SULJE</button>
@@ -2571,6 +2615,17 @@ function App() {
   const isMeSelected = selected && selected.key === currentKey;
   const champion = playoff?.championKey ? playersMap[playoff.championKey] : null;
 
+  // Badget & tier valitulle pelaajalle (D2)
+  const monthChampKey = (() => {
+    const r = periodRange('thisMonth');
+    const rows = aggregatePlayersForPeriod(playersMap, dailyStats, deals, r.startKey, r.endKey);
+    if (!rows.length) return null;
+    return rows.slice().sort((a, b) => (b.buukit || 0) - (a.buukit || 0))[0].key;
+  })();
+  const selectedTotalBuukit = selected ? dailyStats.filter(rr => rr.player_id === selected.key).reduce((a, rr) => a + (rr.buukit || 0), 0) : 0;
+  const selectedTier = selected ? playerTier(selectedTotalBuukit) : null;
+  const selectedBadges = selected ? computeBadges(selected.key, dailyStats, deals, { isMonthChampion: selected.key === monthChampKey }) : [];
+
   if (isAdmin) {
     return (
       <div className="app">
@@ -2627,6 +2682,8 @@ function App() {
           onClose={() => setSelectedKey(null)}
           onAction={performAction}
           onDelete={handleDeletePlayer}
+          tier={selectedTier}
+          badges={selectedBadges}
         />
         <TweaksUI t={t} setTweak={setTweak} onResetAll={handleResetAll} isAdmin />
       </div>
@@ -2690,6 +2747,8 @@ function App() {
         isMe={isMeSelected}
         onClose={() => setSelectedKey(null)}
         onAction={performAction}
+        tier={selectedTier}
+        badges={selectedBadges}
       />
       {dealModalOpen && <DealModal onAdd={handleAddDeal} onClose={() => setDealModalOpen(false)} />}
       <FloatPlus instances={floats} />
