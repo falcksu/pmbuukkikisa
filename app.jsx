@@ -1999,6 +1999,58 @@ function GoalAdmin({ current, label, onSave }) {
   );
 }
 
+// H2H-haaste — viikon duelli (D3)
+function H2HCard({ stand }) {
+  if (!stand) return null;
+  const aLead = stand.leaderKey === stand.a.key;
+  const bLead = stand.leaderKey === stand.b.key;
+  return (
+    <div className="h2h-card">
+      <div className="h2h-tag">⚔️ VIIKON DUELI</div>
+      <div className="h2h-players">
+        <div className={cls('h2h-side', aLead && 'lead')}>
+          <div className="h2h-nick">{stand.a.nick}</div>
+          <div className="h2h-pts">{stand.a.buukit}</div>
+        </div>
+        <div className="h2h-vs">VS</div>
+        <div className={cls('h2h-side', bLead && 'lead')}>
+          <div className="h2h-nick">{stand.b.nick}</div>
+          <div className="h2h-pts">{stand.b.buukit}</div>
+        </div>
+      </div>
+      <div className="h2h-meta">
+        {stand.tie ? 'Tasapeli' : `${(aLead ? stand.a : stand.b).nick} johtaa +${stand.diff}`} · buukit
+      </div>
+    </div>
+  );
+}
+
+// Admin: aseta viikon duelli (D3)
+function H2HAdmin({ players, current, onSave }) {
+  const [a, setA] = useState(current?.a || '');
+  const [b, setB] = useState(current?.b || '');
+  useEffect(() => { setA(current?.a || ''); setB(current?.b || ''); }, [current]);
+  const opts = (players || []).filter(p => p.key !== ADMIN_KEY && !p.is_admin);
+  return (
+    <div className="h2h-admin">
+      <div className="h2h-admin-title">VIIKON DUELI (buukit)</div>
+      <div className="h2h-admin-row">
+        <select value={a} onChange={e => setA(e.target.value)}>
+          <option value="">— pelaaja A —</option>
+          {opts.map(p => <option key={p.key} value={p.key}>{p.nick} · {p.city}</option>)}
+        </select>
+        <span className="h2h-admin-vs">vs</span>
+        <select value={b} onChange={e => setB(e.target.value)}>
+          <option value="">— pelaaja B —</option>
+          {opts.map(p => <option key={p.key} value={p.key}>{p.nick} · {p.city}</option>)}
+        </select>
+        <button disabled={!a || !b || a === b} onClick={() => onSave(a, b)}>Aseta duelli</button>
+        {current && <button className="h2h-admin-clear" onClick={() => onSave(null, null)}>Poista</button>}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
@@ -2032,6 +2084,7 @@ function App() {
   const [dailyStats, setDailyStats] = useState([]);
   const [deals, setDeals] = useState([]);
   const [goals, setGoals] = useState({}); // { 'YYYY-MM': { metric, target } }
+  const [h2h, setH2H] = useState(null); // { a, b }
   const [activeTab, setActiveTab] = useState('leaderboard');
   // Aikajaksot (C)
   const [periodKind, setPeriodKind] = useState('thisMonth');
@@ -2047,6 +2100,7 @@ function App() {
   const dailyRef      = useRef([]);
   const dealsRef      = useRef([]);
   const goalsRef      = useRef({});
+  const h2hRef        = useRef(null);
   const isAdminRef    = useRef(false); // vakaa admin-tarkistus callbackeille
 
   function applyDerivedToPlayers(rawMap, rows, dealRows) {
@@ -2087,13 +2141,14 @@ function App() {
   // Datalataus + realtime. Tuotannossa vasta kun pelaaja on linkitetty.
   useEffect(() => {
     if (DB.hasAuth && !linkedPlayer) return;
-    let unsubP, unsubPO, unsubPout, unsubD, unsubDeals, unsubGoals;
+    let unsubP, unsubPO, unsubPout, unsubD, unsubDeals, unsubGoals, unsubH2H;
     (async () => {
       const initial = await DB.init();
       const rawPlayers = initial.players || {};
       const dailyRows  = initial.daily   || [];
       const dealRows   = initial.deals   || [];
       const goalsData  = initial.goals   || {};
+      const h2hData    = initial.h2h     || null;
       const po         = migratePlayoff(initial.playoff || EMPTY_PLAYOFF);
       const pout       = initial.playout || EMPTY_PLAYOUT;
 
@@ -2103,12 +2158,14 @@ function App() {
       dailyRef.current      = dailyRows;
       dealsRef.current      = dealRows;
       goalsRef.current      = goalsData;
+      h2hRef.current        = h2hData;
       playersMapRef.current = players;
       playoffRef.current    = po;
       playoutRef.current    = pout;
       setDailyStats(dailyRows);
       setDeals(dealRows);
       setGoals(goalsData);
+      setH2H(h2hData);
       setPlayersMap(players);
       setPlayoff(po);
       setPlayout(pout);
@@ -2151,6 +2208,10 @@ function App() {
         goalsRef.current = next;
         setGoals(next);
       });
+      unsubH2H = DB.subscribeH2H((x) => {
+        h2hRef.current = x || null;
+        setH2H(x || null);
+      });
     })();
     return () => {
       if (unsubP) unsubP();
@@ -2159,6 +2220,7 @@ function App() {
       if (unsubD) unsubD();
       if (unsubDeals) unsubDeals();
       if (unsubGoals) unsubGoals();
+      if (unsubH2H) unsubH2H();
     };
   }, [DB.hasAuth ? !!linkedPlayer : true]);
 
@@ -2238,6 +2300,15 @@ function App() {
     goalsRef.current = next;
     setGoals(next);
     DB.saveGoals(next);
+  }, []);
+
+  // H2H-haaste (D3)
+  const h2hStand = useMemo(() => h2hStanding(h2h, dailyStats, playersMap), [h2h, dailyStats, playersMap]);
+  const handleSaveH2H = useCallback((a, b) => {
+    const next = (a && b && a !== b) ? { a, b } : null;
+    h2hRef.current = next;
+    setH2H(next);
+    DB.saveH2H(next);
   }, []);
 
   const goalCelebratedRef = useRef(false);
@@ -2661,12 +2732,14 @@ function App() {
           <div>
             <AdminPanel players={sorted} onDelete={handleDeletePlayer} onResetAll={handleResetAll} />
             <GoalAdmin current={goals[monthKey]} label={monthLabel} onSave={handleSaveGoal} />
+            <H2HAdmin players={sorted} current={h2h} onSave={handleSaveH2H} />
             <GoalBar progress={goalProgress} label={monthLabel} />
             <PeriodBar periodKind={periodKind} onKind={setPeriodKind} customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} label={periodInfo.label} />
             <RankTabs rankBy={rankBy} onRankBy={setRankBy} />
             <DashboardTable rows={periodPlayers} rankBy={rankBy} onSelect={(p) => setSelectedKey(p.key)} meKey={null} />
           </div>
           <div className="side">
+            <H2HCard stand={h2hStand} />
             {t.showPodium && <Podium sorted={periodPlayers} onSelect={(p) => setSelectedKey(p.key)} />}
           </div>
         </div>
@@ -2734,6 +2807,7 @@ function App() {
           <DashboardTable rows={periodPlayers} rankBy={rankBy} onSelect={(p) => setSelectedKey(p.key)} meKey={currentKey} />
         </div>
         <div className="side">
+          <H2HCard stand={h2hStand} />
           {t.showPodium && <Podium sorted={periodPlayers} onSelect={(p) => setSelectedKey(p.key)} />}
         </div>
       </div>

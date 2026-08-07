@@ -2684,3 +2684,25 @@ body { font-size: 14px; }
 .bp-prog-bar { flex: 1; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
 .bp-prog-fill { height: 100%; background: var(--accent); border-radius: 2px; }
 .bp-prog-txt { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--ink-4); white-space: nowrap; }
+
+/* H2H-haaste (D3) */
+.h2h-card { background: var(--bg-2); border: 2px solid var(--ink); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; text-align: center; }
+.h2h-tag { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: .12em; color: var(--accent); margin-bottom: 12px; }
+.h2h-players { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.h2h-side { flex: 1; opacity: .7; }
+.h2h-side.lead { opacity: 1; }
+.h2h-nick { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 18px; letter-spacing: .02em; text-transform: uppercase; }
+.h2h-pts { font-family: 'JetBrains Mono', monospace; font-size: 30px; font-weight: 700; color: var(--ink-3); }
+.h2h-side.lead .h2h-pts { color: var(--accent); }
+.h2h-vs { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 14px; color: var(--ink-3); }
+.h2h-meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-3); margin-top: 10px; letter-spacing: .04em; }
+
+.h2h-admin { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.h2h-admin-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 13px; letter-spacing: .08em; color: var(--ink-3); margin-bottom: 8px; }
+.h2h-admin-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.h2h-admin-row select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-size: 14px; }
+.h2h-admin-vs { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; color: var(--ink-3); }
+.h2h-admin-row button { padding: 8px 14px; border: none; border-radius: 7px; background: var(--ink); color: #fff; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 13px; }
+.h2h-admin-row button:hover:not(:disabled) { background: var(--accent); }
+.h2h-admin-row button:disabled { opacity: .5; cursor: default; }
+.h2h-admin-clear { background: var(--bg-3) !important; color: var(--ink-2) !important; }
