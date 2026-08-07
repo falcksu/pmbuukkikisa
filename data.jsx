@@ -341,6 +341,60 @@ function resetPlayout() {
   return { ...EMPTY_PLAYOUT };
 }
 
+// ── Hall of Fame (osaprojekti D4) ────────────────────────────
+// Laskee all-time-ennätykset + kuukausi-MVP:t jaetusta datasta. Admin pois.
+function hallOfFame(dailyStats, deals, playersMap) {
+  const isReal = (k) => k !== '__admin__' && !(playersMap && playersMap[k] && playersMap[k].is_admin);
+  const nickOf = (k) => (playersMap && playersMap[k] && playersMap[k].nick) || k;
+  const per = {};
+  const ens = (k) => per[k] || (per[k] = { key: k, buukit: 0, dealsCount: 0, megis: 0 });
+  (dailyStats || []).forEach(r => { if (isReal(r.player_id)) ens(r.player_id).buukit += r.buukit || 0; });
+  (deals || []).forEach(d => { if (isReal(d.player_id)) { const p = ens(d.player_id); p.dealsCount++; p.megis += Number(d.megis) || 0; } });
+  const arr = Object.values(per);
+  const topBy = (f) => arr.reduce((best, p) => (!best || p[f] > best[f]) ? p : best, null);
+
+  let bestDay = null;
+  (dailyStats || []).forEach(r => {
+    if (isReal(r.player_id) && (r.buukit || 0) > 0 && (!bestDay || r.buukit > bestDay.buukit)) bestDay = { key: r.player_id, buukit: r.buukit, date: r.date_key };
+  });
+  let bigDeal = null;
+  (deals || []).forEach(d => {
+    if (!isReal(d.player_id)) return;
+    const m = Number(d.megis) || 0;
+    if (!bigDeal || m > bigDeal.megis) bigDeal = { key: d.player_id, megis: m, toimiala: d.toimiala };
+  });
+  const byPlayerDaily = {};
+  (dailyStats || []).forEach(r => { if (isReal(r.player_id)) (byPlayerDaily[r.player_id] = byPlayerDaily[r.player_id] || []).push(r); });
+  let bestStreak = null;
+  Object.keys(byPlayerDaily).forEach(k => { const s = longestBuukitStreak(byPlayerDaily[k]); if (!bestStreak || s > bestStreak.streak) bestStreak = { key: k, streak: s }; });
+
+  const rec = (id, label, icon, holderKey, value, sub) =>
+    (holderKey && value > 0) ? { id, label, icon, nick: nickOf(holderKey), value, sub } : { id, label, icon, nick: '—', value: 0, sub: '' };
+  const mostB = topBy('buukit'), mostD = topBy('dealsCount'), mostM = topBy('megis');
+  const records = [
+    rec('most_buukit', 'Eniten buukkeja', '🎯', mostB && mostB.buukit > 0 ? mostB.key : null, mostB ? mostB.buukit : 0, 'buukkia'),
+    rec('most_deals', 'Eniten kauppoja', '🤝', mostD && mostD.dealsCount > 0 ? mostD.key : null, mostD ? mostD.dealsCount : 0, 'kauppaa'),
+    rec('most_megis', 'Eniten Megisejä', '⚡', mostM && mostM.megis > 0 ? mostM.key : null, mostM ? Math.round(mostM.megis) : 0, 'Megis'),
+    rec('best_day', 'Paras päivä', '🔥', bestDay ? bestDay.key : null, bestDay ? bestDay.buukit : 0, bestDay ? ('buukkia · ' + bestDay.date) : 'buukkia'),
+    rec('longest_streak', 'Pisin putki', '🔄', bestStreak && bestStreak.streak > 0 ? bestStreak.key : null, bestStreak ? bestStreak.streak : 0, 'pv peräkkäin'),
+    rec('biggest_deal', 'Isoin kauppa', '🐘', bigDeal && bigDeal.megis > 0 ? bigDeal.key : null, bigDeal ? Math.round(bigDeal.megis) : 0, (bigDeal && bigDeal.toimiala) ? ('Megis · ' + bigDeal.toimiala) : 'Megis'),
+  ];
+
+  const byMonth = {};
+  (dailyStats || []).forEach(r => {
+    if (!isReal(r.player_id) || (r.buukit || 0) <= 0) return;
+    const m = r.date_key.slice(0, 7);
+    byMonth[m] = byMonth[m] || {};
+    byMonth[m][r.player_id] = (byMonth[m][r.player_id] || 0) + r.buukit;
+  });
+  const monthlyMvps = Object.keys(byMonth).sort().reverse().map(m => {
+    const [k, b] = Object.entries(byMonth[m]).sort((a, b) => b[1] - a[1])[0];
+    return { month: m, key: k, nick: nickOf(k), buukit: b };
+  });
+
+  return { records, monthlyMvps };
+}
+
 // ── H2H-haaste (osaprojekti D3) ────────────────────────────
 // Viikon kahden pelaajan buukki-duelli. Palauttaa tilanteen tai null.
 function h2hStanding(h2h, dailyStats, playersMap, refDate) {
@@ -552,7 +606,7 @@ Object.assign(window, {
   COMPETITION,
   resolveAuthGate, validateEmail, validateRegForm,
   periodRange, aggregatePlayersForPeriod, monthProgress, buildTickerFeed,
-  BADGE_TIERS, playerTier, computeBadges, longestBuukitStreak, h2hStanding,
+  BADGE_TIERS, playerTier, computeBadges, longestBuukitStreak, h2hStanding, hallOfFame,
   LS_CURRENT,
   playerKey, emptyStats,
   loadCurrentKey, saveCurrentKey,
