@@ -300,6 +300,31 @@
     }
   }
 
+  // ── Tiimitavoitteet (osaprojekti D1) — meta id='goals' ─────────────
+  const LS_GOALS = 'buukkauskisa.goals.v1';
+  let goalsListeners = [];
+  function loadLocalGoals() {
+    try { const r = localStorage.getItem(LS_GOALS); return r ? JSON.parse(r) : {}; } catch(e) { return {}; }
+  }
+  function saveLocalGoals(state) { try { localStorage.setItem(LS_GOALS, JSON.stringify(state)); } catch(e) {} }
+  async function fetchGoals() {
+    if (!client) return loadLocalGoals();
+    const { data, error } = await client.from('meta').select('payload').eq('id', 'goals').maybeSingle();
+    if (error) { console.error('fetchGoals error:', error); return loadLocalGoals(); }
+    return data ? (data.payload || {}) : {};
+  }
+  function notifyGoals(state) { goalsListeners.forEach(cb => { try { cb(state); } catch(e) {} }); }
+  function subscribeGoals(cb) { goalsListeners.push(cb); return () => { goalsListeners = goalsListeners.filter(x => x !== cb); }; }
+  async function saveGoals(state) {
+    if (client) {
+      const { error } = await client.from('meta').upsert({ id: 'goals', payload: state, updated_at: new Date().toISOString() });
+      if (error) console.error('saveGoals error:', error);
+    } else {
+      saveLocalGoals(state);
+      notifyGoals(state);
+    }
+  }
+
   // ── Init ─────────────────────────
   async function init() {
     const initialPlayers = await fetchAll();
@@ -307,6 +332,7 @@
     const initialPlayout = await fetchPlayout();
     const initialDaily   = await fetchAllDailyStats();
     const initialDeals   = await fetchAllDeals();
+    const initialGoals   = await fetchGoals();
     if (client) {
       client
         .channel('public:players')
@@ -322,6 +348,7 @@
               const id = payload?.new?.id || payload?.old?.id;
               if (id === 'playoffs') { const fresh = await fetchPlayoff(); notifyPlayoff(fresh); }
               if (id === 'playout')  { const fresh = await fetchPlayout(); notifyPlayout(fresh); }
+              if (id === 'goals')    { const fresh = await fetchGoals(); notifyGoals(fresh); }
             })
         .subscribe();
       client
@@ -343,9 +370,10 @@
         if (e.key === LS_PLAYOUT) notifyPlayout(loadLocalPlayout());
         if (e.key === LS_DAILY)   notifyDaily(loadLocalDaily());
         if (e.key === LS_DEALS)   notifyDeals(loadLocalDeals());
+        if (e.key === LS_GOALS)   notifyGoals(loadLocalGoals());
       });
     }
-    return { players: initialPlayers, playoff: initialPlayoff, playout: initialPlayout, daily: initialDaily, deals: initialDeals };
+    return { players: initialPlayers, playoff: initialPlayoff, playout: initialPlayout, daily: initialDaily, deals: initialDeals, goals: initialGoals };
   }
 
   // ── Auth (osaprojekti B) ─────────────────────────
@@ -403,5 +431,8 @@
     fetchAllDeals,
     upsertDeal,
     deleteDeal,
+    subscribeGoals,
+    fetchGoals,
+    saveGoals,
   };
 })();
