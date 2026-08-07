@@ -341,6 +341,20 @@ function resetPlayout() {
   return { ...EMPTY_PLAYOUT };
 }
 
+// ── Tiimitavoite (osaprojekti D1) ────────────────────────────
+// Kuukausitavoitteen edistyminen. Palauttaa {pct,remaining,daysLeft,neededPerDay,hit,target,current}.
+function monthProgress(target, current, refDate) {
+  const d = refDate ? new Date(refDate) : new Date();
+  const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  const daysLeft = daysInMonth - d.getDate() + 1; // sisältää tämän päivän
+  const t = Number(target) || 0, c = Number(current) || 0;
+  const remaining = Math.max(0, t - c);
+  const pct = t > 0 ? Math.min(100, Math.round(c / t * 100)) : 0;
+  const hit = t > 0 && c >= t;
+  const neededPerDay = (t > 0 && !hit) ? (daysLeft > 0 ? Math.ceil(remaining / daysLeft) : remaining) : 0;
+  return { pct, remaining, daysLeft, neededPerDay, hit, target: t, current: c };
+}
+
 // ── Aikajaksot (osaprojekti C) ────────────────────────────
 // Aikaväli valitulle jaksolle. Palauttaa {startKey,endKey,label} muodossa YYYY-MM-DD.
 function periodRange(kind, refDate, customStart, customEnd) {
@@ -417,7 +431,7 @@ function validateRegForm(f) {
 Object.assign(window, {
   COMPETITION,
   resolveAuthGate, validateEmail, validateRegForm,
-  periodRange, aggregatePlayersForPeriod,
+  periodRange, aggregatePlayersForPeriod, monthProgress,
   LS_CURRENT,
   playerKey, emptyStats,
   loadCurrentKey, saveCurrentKey,
