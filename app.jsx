@@ -1908,6 +1908,53 @@ function DashboardTable({ rows, rankBy, onSelect, meKey }) {
   );
 }
 
+// Tiimitavoite — edistymispalkki (kaikille) (D1)
+function GoalBar({ progress, label }) {
+  if (!progress) return null;
+  const unit = progress.metric === 'megis' ? 'Megis' : progress.metric === 'eurot' ? '€' : 'buukkia';
+  return (
+    <div className={cls('goal-bar', progress.hit && 'goal-hit')}>
+      <div className="goal-bar-head">
+        <span className="goal-bar-title">🎯 TIIMITAVOITE · {label}</span>
+        <span className="goal-bar-nums">{Math.round(progress.current)} / {progress.target} {unit}</span>
+      </div>
+      <div className="goal-track"><div className="goal-fill" style={{ width: progress.pct + '%' }} /></div>
+      <div className="goal-meta">
+        {progress.hit ? (
+          <span className="goal-done">🎉 TAVOITE SAAVUTETTU!</span>
+        ) : (
+          <>
+            <span>{progress.pct}% suoritettu</span>
+            <span>· {progress.daysLeft} pv jäljellä</span>
+            <span>· tarvitaan +{progress.neededPerDay}/pv</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Admin: aseta kuluvan kuukauden tiimitavoite (D1)
+function GoalAdmin({ current, label, onSave }) {
+  const [metric, setMetric] = useState(current?.metric || 'buukit');
+  const [target, setTarget] = useState(current?.target || '');
+  useEffect(() => { setMetric(current?.metric || 'buukit'); setTarget(current?.target || ''); }, [current]);
+  return (
+    <div className="goal-admin">
+      <div className="goal-admin-title">TIIMITAVOITE · {label}</div>
+      <div className="goal-admin-row">
+        <select value={metric} onChange={e => setMetric(e.target.value)}>
+          <option value="buukit">Buukit</option>
+          <option value="megis">Megis</option>
+          <option value="eurot">Eurot</option>
+        </select>
+        <input type="number" min="0" placeholder="Tavoite" value={target} onChange={e => setTarget(e.target.value)} />
+        <button onClick={() => onSave(metric, target)}>Tallenna tavoite</button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
@@ -1940,6 +1987,7 @@ function App() {
   useEffect(() => { excludedKeysRef.current = excludedKeys; }, [excludedKeys]);
   const [dailyStats, setDailyStats] = useState([]);
   const [deals, setDeals] = useState([]);
+  const [goals, setGoals] = useState({}); // { 'YYYY-MM': { metric, target } }
   const [activeTab, setActiveTab] = useState('leaderboard');
   // Aikajaksot (C)
   const [periodKind, setPeriodKind] = useState('thisMonth');
@@ -1954,6 +2002,7 @@ function App() {
   const playoutRef    = useRef(EMPTY_PLAYOUT);
   const dailyRef      = useRef([]);
   const dealsRef      = useRef([]);
+  const goalsRef      = useRef({});
   const isAdminRef    = useRef(false); // vakaa admin-tarkistus callbackeille
 
   function applyDerivedToPlayers(rawMap, rows, dealRows) {
@@ -1994,12 +2043,13 @@ function App() {
   // Datalataus + realtime. Tuotannossa vasta kun pelaaja on linkitetty.
   useEffect(() => {
     if (DB.hasAuth && !linkedPlayer) return;
-    let unsubP, unsubPO, unsubPout, unsubD, unsubDeals;
+    let unsubP, unsubPO, unsubPout, unsubD, unsubDeals, unsubGoals;
     (async () => {
       const initial = await DB.init();
       const rawPlayers = initial.players || {};
       const dailyRows  = initial.daily   || [];
       const dealRows   = initial.deals   || [];
+      const goalsData  = initial.goals   || {};
       const po         = migratePlayoff(initial.playoff || EMPTY_PLAYOFF);
       const pout       = initial.playout || EMPTY_PLAYOUT;
 
@@ -2008,11 +2058,13 @@ function App() {
 
       dailyRef.current      = dailyRows;
       dealsRef.current      = dealRows;
+      goalsRef.current      = goalsData;
       playersMapRef.current = players;
       playoffRef.current    = po;
       playoutRef.current    = pout;
       setDailyStats(dailyRows);
       setDeals(dealRows);
+      setGoals(goalsData);
       setPlayersMap(players);
       setPlayoff(po);
       setPlayout(pout);
@@ -2050,6 +2102,11 @@ function App() {
         playersMapRef.current = recalced;
         setPlayersMap(recalced);
       });
+      unsubGoals = DB.subscribeGoals((g) => {
+        const next = g || {};
+        goalsRef.current = next;
+        setGoals(next);
+      });
     })();
     return () => {
       if (unsubP) unsubP();
@@ -2057,6 +2114,7 @@ function App() {
       if (unsubPout) unsubPout();
       if (unsubD) unsubD();
       if (unsubDeals) unsubDeals();
+      if (unsubGoals) unsubGoals();
     };
   }, [DB.hasAuth ? !!linkedPlayer : true]);
 
@@ -2110,6 +2168,36 @@ function App() {
     arr.sort((a, b) => ((b[metric] || 0) - (a[metric] || 0)) || ((b.buukit || 0) - (a.buukit || 0)));
     return arr.map((p, i) => ({ ...p, rank: i + 1 }));
   }, [playersMap, dailyStats, deals, periodInfo, rankBy]);
+
+  // Tiimitavoite (D1): kuluvan kuukauden edistyminen
+  const monthKey = localDateKey(new Date()).slice(0, 7);
+  const monthLabel = new Date().toLocaleDateString('fi-FI', { month: 'long', year: 'numeric' }).toUpperCase();
+  const goalProgress = useMemo(() => {
+    const g = goals[monthKey];
+    if (!g || !g.target) return null;
+    const r = periodRange('thisMonth');
+    const rows = aggregatePlayersForPeriod(playersMap, dailyStats, deals, r.startKey, r.endKey);
+    const field = g.metric === 'megis' ? 'megisTotal' : g.metric === 'eurot' ? 'eurTotal' : 'buukit';
+    const teamTotal = rows.reduce((a, p) => a + (p[field] || 0), 0);
+    return { ...monthProgress(g.target, teamTotal, new Date()), metric: g.metric };
+  }, [goals, monthKey, playersMap, dailyStats, deals]);
+
+  const handleSaveGoal = useCallback((metric, target) => {
+    const mk = localDateKey(new Date()).slice(0, 7);
+    const next = { ...goalsRef.current, [mk]: { metric, target: Math.max(0, Number(target) || 0) } };
+    goalsRef.current = next;
+    setGoals(next);
+    DB.saveGoals(next);
+  }, []);
+
+  const goalCelebratedRef = useRef(false);
+  useEffect(() => {
+    if (goalProgress && goalProgress.hit && !goalCelebratedRef.current) {
+      goalCelebratedRef.current = true;
+      setConfettiKey(k => k + 1);
+    }
+    if (goalProgress && !goalProgress.hit) goalCelebratedRef.current = false;
+  }, [goalProgress]);
 
   // Kierroskohtaiset pisteet — kukin kierros alkaa nollista
   // QF: indeksit 10–11 (8.–9.6), SF: 12–14 (10.–12.6), F: 15–18 (15.–18.6)
@@ -2532,6 +2620,8 @@ function App() {
         <div className="main">
           <div>
             <AdminPanel players={sorted} onDelete={handleDeletePlayer} onResetAll={handleResetAll} />
+            <GoalAdmin current={goals[monthKey]} label={monthLabel} onSave={handleSaveGoal} />
+            <GoalBar progress={goalProgress} label={monthLabel} />
             <PeriodBar periodKind={periodKind} onKind={setPeriodKind} customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} label={periodInfo.label} />
             <RankTabs rankBy={rankBy} onRankBy={setRankBy} />
             <DashboardTable rows={periodPlayers} rankBy={rankBy} onSelect={(p) => setSelectedKey(p.key)} meKey={null} />
@@ -2594,6 +2684,7 @@ function App() {
       <div className="main">
         <div>
           <MyCard me={me} onAction={performAction} />
+          <GoalBar progress={goalProgress} label={monthLabel} />
           <div className="lb-toolbar">
             <PeriodBar periodKind={periodKind} onKind={setPeriodKind} customStart={customStart} customEnd={customEnd} onCustomStart={setCustomStart} onCustomEnd={setCustomEnd} label={periodInfo.label} />
             <button className="add-deal-cta" onClick={() => setDealModalOpen(true)}>➕ Lisää kauppa</button>
