@@ -341,6 +341,25 @@ function resetPlayout() {
   return { ...EMPTY_PLAYOUT };
 }
 
+// ── H2H-haaste (osaprojekti D3) ────────────────────────────
+// Viikon kahden pelaajan buukki-duelli. Palauttaa tilanteen tai null.
+function h2hStanding(h2h, dailyStats, playersMap, refDate) {
+  if (!h2h || !h2h.a || !h2h.b) return null;
+  const r = periodRange('thisWeek', refDate);
+  const sumWeek = (key) => (dailyStats || [])
+    .filter(d => d.player_id === key && d.date_key >= r.startKey && d.date_key <= r.endKey)
+    .reduce((s, d) => s + (d.buukit || 0), 0);
+  const nickOf = (key) => (playersMap && playersMap[key] && playersMap[key].nick) || key;
+  const aB = sumWeek(h2h.a), bB = sumWeek(h2h.b);
+  const tie = aB === bB;
+  return {
+    a: { key: h2h.a, nick: nickOf(h2h.a), buukit: aB },
+    b: { key: h2h.b, nick: nickOf(h2h.b), buukit: bB },
+    leaderKey: tie ? null : (aB > bB ? h2h.a : h2h.b),
+    diff: Math.abs(aB - bB), tie, weekLabel: r.label,
+  };
+}
+
 // ── Badget & tier (osaprojekti D2) ────────────────────────────
 // Tier kaikkien aikojen buukkien mukaan (kalibroitu: ~20 buukkia/kk/pelaaja).
 const BADGE_TIERS = [
@@ -533,7 +552,7 @@ Object.assign(window, {
   COMPETITION,
   resolveAuthGate, validateEmail, validateRegForm,
   periodRange, aggregatePlayersForPeriod, monthProgress, buildTickerFeed,
-  BADGE_TIERS, playerTier, computeBadges, longestBuukitStreak,
+  BADGE_TIERS, playerTier, computeBadges, longestBuukitStreak, h2hStanding,
   LS_CURRENT,
   playerKey, emptyStats,
   loadCurrentKey, saveCurrentKey,
