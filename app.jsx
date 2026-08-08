@@ -249,7 +249,6 @@ function LoginScreen({ onLogin, existingPlayers }) {
 // ── Header ───────────────────────────
 
 function Header({ me, onLogout, playerCount, isAdmin, today, dbBackend }) {
-  const total = COMPETITION.totalDays;
   return (
     <header className="hdr">
       <div className="hdr-logo" style={{display:'none'}}>
@@ -258,31 +257,9 @@ function Header({ me, onLogout, playerCount, isAdmin, today, dbBackend }) {
         <div className="display competition">
           BUUKKAUS<span className="accent">KISA</span>
         </div>
-        <div className="edition">— Kausi&nbsp;1 · Vol&nbsp;I · {playerCount}&nbsp;pelaajaa</div>
+        <div className="edition">Myynnin dashboard · {playerCount}&nbsp;pelaajaa</div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <div className="hdr-meta">
-          <div>
-            <div className="label">Kausi</div>
-            <div className="date">
-              25.5<span className="sep">→</span>5.6
-              <span className="sub">10 arkipäivää · ei viikonloppuja</span>
-            </div>
-            <div className="progress">
-              {Array.from({ length: total }).map((_, i) => {
-                const n = i + 1;
-                const klass = n < today ? 'done' : n === today ? 'today' : '';
-                return <div key={i} className={cls('day-pip', klass)} />;
-              })}
-            </div>
-          </div>
-          <div>
-            <div className="label">Päivä</div>
-            <div className="day-info">
-              {String(today).padStart(2, '0')}<span className="total"> / {total}</span>
-            </div>
-          </div>
-        </div>
         <div className={cls('hdr-user', isAdmin && 'is-admin')}>
           <div className="av">{me.init}</div>
           <div>
@@ -2792,7 +2769,7 @@ function App() {
         </div>
         )}
         <div className="footer-stripe">
-          <div>BUUKKAUSKISA · KAUSI 1 · VOL.&nbsp;I · {sorted.length}&nbsp;PELAAJAA · ADMIN-NÄKYMÄ</div>
+          <div>MYYNNIN DASHBOARD · {sorted.length}&nbsp;PELAAJAA · ADMIN-NÄKYMÄ</div>
           <div>POISTA PELAAJA → ROSKAKORI-IKONI &nbsp;|&nbsp; ADMIN EI NÄY TILASTOISSA</div>
         </div>
         <PlayerModal
@@ -2862,8 +2839,8 @@ function App() {
       </div>
       )}
       <div className="footer-stripe">
-        <div>BUUKKAUSKISA · KAUSI 1 · VOL.&nbsp;I · {sortedPublic.length}&nbsp;PELAAJAA</div>
-        <div>KLIKKAA RIVIÄ → PELAAJAPROFIILI &nbsp;|&nbsp; PELATAAN VAIN ARKIPÄIVISIN</div>
+        <div>MYYNNIN DASHBOARD · {sortedPublic.length}&nbsp;PELAAJAA</div>
+        <div>KLIKKAA RIVIÄ → PELAAJAPROFIILI &nbsp;|&nbsp; TIER, BADGET & ENNÄTYKSET</div>
       </div>
       <PlayerModal
         player={selected}
