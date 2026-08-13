@@ -279,7 +279,7 @@
   async function upsertDeal(deal) {
     if (client) {
       const { error } = await client.from('deals').upsert(deal);
-      if (error) console.error('upsertDeal error:', error);
+      if (error) { console.error('upsertDeal error:', error); return { ok: false, error, deal }; }
     } else {
       let rows = loadLocalDeals();
       const idx = rows.findIndex(r => r.id === deal.id);
@@ -287,7 +287,7 @@
       saveLocalDeals(rows);
       notifyDeals(rows);
     }
-    return deal;
+    return { ok: true, deal };
   }
   async function deleteDeal(id) {
     if (client) {

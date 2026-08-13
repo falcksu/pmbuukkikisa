@@ -40,6 +40,14 @@ const w = load('data.jsx').window;
   assert(p.avgLeadDays === 15, 'avgLeadDays = (10+20)/2 = 15');
   assert(p.avgMeetings === 4, 'avgMeetings = (3+5)/2 = 4');
 }
+// newDealId: uniikki id, ei kierrätä sekvenssiä (estää ylikirjoituksen poiston jälkeen)
+{
+  const a = w.newDealId('räntilä:hämeenlinna', '2026-08-13');
+  const b = w.newDealId('räntilä:hämeenlinna', '2026-08-13');
+  assert(a !== b, 'kaksi kutsua samalle pelaajalle+päivälle → eri id');
+  assert(a.startsWith('räntilä:hämeenlinna_2026-08-13_'), 'id alkaa pelaaja_päivä_');
+  assert(w.newDealId('a:b', '2026-01-01').indexOf('_2026-01-01_') > -1, 'sisältää päivämäärän');
+}
 // tapaamiset summautuu daily-riveistä
 {
   const rows = [

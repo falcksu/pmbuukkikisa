@@ -1252,12 +1252,18 @@ function DealModal({ onAdd, onClose }) {
   const [signedDate, setSignedDate] = useState(today);
   const [meetingCount, setMeetingCount] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   const submit = async () => {
     if (!megis && !eurot && !toimiala.trim()) return;
     setSaving(true);
-    await onAdd({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount });
+    setError(null);
+    const res = await onAdd({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount });
     setSaving(false);
+    if (res && res.ok === false) {
+      setError((res.error && res.error.message) ? res.error.message : 'Tallennus epäonnistui. Yritä uudelleen.');
+      return; // pidä modaali auki, älä hukkaa syötettä
+    }
     onClose();
   };
 
@@ -1285,6 +1291,7 @@ function DealModal({ onAdd, onClose }) {
             <label className="deal-date-field"><span>Allekirjoitettu</span>
               <input className="deal-input" type="date" value={signedDate} onChange={e => setSignedDate(e.target.value)} /></label>
           </div>
+          {error && <div className="deal-error" role="alert">⚠️ {error}</div>}
           <div className="deal-form-actions">
             <button className="deal-save" disabled={saving} onClick={submit}>{saving ? 'Tallennetaan…' : 'Tallenna kauppa'}</button>
             <button className="deal-cancel" onClick={onClose}>Peruuta</button>
@@ -1304,14 +1311,23 @@ function DealEntry({ deals, onAdd, onDelete }) {
   const [firstMeetingDate, setFirstMeetingDate] = useState('');
   const [signedDate, setSignedDate] = useState(today);
   const [meetingCount, setMeetingCount] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   const reset = () => {
     setToimiala(''); setMegis(''); setEurot('');
     setFirstMeetingDate(''); setSignedDate(today); setMeetingCount('');
   };
-  const submit = () => {
+  const submit = async () => {
     if (!megis && !eurot && !toimiala.trim()) return;
-    onAdd({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount });
+    setSaving(true);
+    setError(null);
+    const res = await onAdd({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount });
+    setSaving(false);
+    if (res && res.ok === false) {
+      setError((res.error && res.error.message) ? res.error.message : 'Tallennus epäonnistui. Yritä uudelleen.');
+      return; // pidä lomake auki
+    }
     reset(); setOpen(false);
   };
 
@@ -1351,9 +1367,10 @@ function DealEntry({ deals, onAdd, onDelete }) {
                      onChange={e => setSignedDate(e.target.value)} />
             </label>
           </div>
+          {error && <div className="deal-error" role="alert">⚠️ {error}</div>}
           <div className="deal-form-actions">
-            <button className="deal-save" onClick={submit}>Tallenna kauppa</button>
-            <button className="deal-cancel" onClick={() => { reset(); setOpen(false); }}>Peruuta</button>
+            <button className="deal-save" disabled={saving} onClick={submit}>{saving ? 'Tallennetaan…' : 'Tallenna kauppa'}</button>
+            <button className="deal-cancel" onClick={() => { reset(); setError(null); setOpen(false); }}>Peruuta</button>
           </div>
         </div>
       )}
@@ -2611,12 +2628,11 @@ function App() {
 
   // Tallenna päiväraportti-rivi ja päivitä pelaajan kokonaistilasto
   const handleAddDeal = useCallback(async ({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount }) => {
-    if (!currentKey || currentKey === ADMIN_KEY || isAdminRef.current) return;
+    if (!currentKey || currentKey === ADMIN_KEY || isAdminRef.current) return { ok: false, error: { message: 'admin ei kirjaa kauppoja' } };
     // Kauppa ankkuroidaan allekirjoituspäivään (oletus: tänään)
     const dateKey = (signedDate && signedDate.trim()) ? signedDate.trim() : localDateKey(new Date());
-    const sameDay = dealsRef.current.filter(d => d.player_id === currentKey && d.date_key === dateKey);
-    const seq = sameDay.length + 1;
-    const id = `${currentKey}_${dateKey}_${seq}`;
+    // Uniikki id (ei sekvenssiä) → poiston jälkeinen uusi kauppa ei ylikirjoita aiempaa
+    const id = newDealId(currentKey, dateKey);
     const deal = {
       id, player_id: currentKey, date_key: dateKey,
       toimiala: (toimiala || '').trim(),
@@ -2627,7 +2643,10 @@ function App() {
       meeting_count: Math.max(0, Math.floor(Number(meetingCount) || 0)),
       created_at: new Date().toISOString(),
     };
-    await DB.upsertDeal(deal);
+    // Tallenna ensin DB:hen; jos se epäonnistuu, ÄLÄ näytä kauppaa optimistisesti
+    // (aiemmin virhe niellattiin ja realtime-haku pyyhki kaupan → "katosi").
+    const res = await DB.upsertDeal(deal);
+    if (res && res.ok === false) return { ok: false, error: res.error };
     const nextDeals = [...dealsRef.current.filter(d => d.id !== id), deal];
     dealsRef.current = nextDeals;
     setDeals(nextDeals);
@@ -2637,6 +2656,7 @@ function App() {
       playersMapRef.current = { ...playersMapRef.current, [currentKey]: recalced };
       setPlayersMap(prev => ({ ...prev, [currentKey]: recalced }));
     }
+    return { ok: true };
   }, [currentKey]);
 
   const handleDeleteDeal = useCallback(async (id) => {

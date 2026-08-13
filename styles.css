@@ -2417,7 +2417,9 @@ body { font-size: 14px; }
 .deal-form-dates { display: flex; gap: 8px; }
 .deal-date-field { display: flex; flex-direction: column; gap: 3px; flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: .04em; color: var(--ink-3); text-transform: uppercase; }
 .deal-form-actions { display: flex; gap: 8px; }
+.deal-error { margin: 2px 0 8px; padding: 7px 10px; background: rgba(210,60,40,.1); border: 1px solid rgba(210,60,40,.4); color: #c0392b; font-size: 12px; font-weight: 600; border-radius: 4px; }
 .deal-save { flex: 1; padding: 8px; background: var(--green, #1a8a3e); color: #fff; border: none; font-weight: 700; cursor: pointer; }
+.deal-save:disabled { opacity: .6; cursor: default; }
 .deal-cancel { padding: 8px 12px; background: var(--bg-3); border: 1px solid var(--line); cursor: pointer; }
 .deal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .deal-row { display: grid; grid-template-columns: minmax(0,1.4fr) auto auto auto auto auto 24px; align-items: center; gap: 10px; padding: 7px 8px; background: var(--bg-2); border: 1px solid var(--line); font-size: 13px; }

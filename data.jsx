@@ -292,6 +292,14 @@ function dealLeadTimeDays(deal) {
   return days >= 0 ? days : null;
 }
 
+// Uniikki kauppa-id. EI kierrätä sekvenssiä (aiempi `seq = sameDay.length+1`
+// ylikirjoitti kaupan, jos saman päivän kauppa poistettiin ja lisättiin uusi).
+// Muoto: "<pelaaja>_<päivä>_<aikaleima><satunnainen>".
+function newDealId(playerKey, dateKey) {
+  const rnd = Math.random().toString(36).slice(2, 7);
+  return `${playerKey}_${dateKey}_${Date.now().toString(36)}${rnd}`;
+}
+
 // Laskee pelaajan kauppa-aggregaatit kauppariveistä (deals = totuuden lähde)
 function recalcPlayerFromDeals(player, myDeals) {
   let megisTotal = 0, eurTotal = 0;
@@ -621,6 +629,6 @@ Object.assign(window, {
   competitionPhase,
   EMPTY_PLAYOFF, MATCH_ORDER,
   setMatchWinner, clearMatchWinner, startPlayoffs, resetPlayoffs, recomputeAdvancement, migratePlayoff,
-  WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats, recalcPlayerFromDeals, dealLeadTimeDays,
+  WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats, recalcPlayerFromDeals, dealLeadTimeDays, newDealId,
   EMPTY_PLAYOUT, startPlayout, setSakko, clearSakko, resetPlayout,
 });
