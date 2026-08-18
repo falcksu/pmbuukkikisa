@@ -1255,11 +1255,19 @@ function DealModal({ onAdd, onClose }) {
   const [error, setError] = useState(null);
 
   const submit = async () => {
+    if (saving) return; // estä tuplaklikkaus
     if (!megis && !eurot && !toimiala.trim()) return;
     setSaving(true);
     setError(null);
-    const res = await onAdd({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount });
-    setSaving(false);
+    let res;
+    try {
+      res = await onAdd({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount });
+    } catch (e) {
+      res = { ok: false, error: { message: (e && e.message) || 'Tallennus epäonnistui.' } };
+    } finally {
+      // AINA — muuten nappi jää ikuisesti tilaan "Tallennetaan…"
+      setSaving(false);
+    }
     if (res && res.ok === false) {
       setError((res.error && res.error.message) ? res.error.message : 'Tallennus epäonnistui. Yritä uudelleen.');
       return; // pidä modaali auki, älä hukkaa syötettä
@@ -1319,11 +1327,18 @@ function DealEntry({ deals, onAdd, onDelete }) {
     setFirstMeetingDate(''); setSignedDate(today); setMeetingCount('');
   };
   const submit = async () => {
+    if (saving) return; // estä tuplaklikkaus
     if (!megis && !eurot && !toimiala.trim()) return;
     setSaving(true);
     setError(null);
-    const res = await onAdd({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount });
-    setSaving(false);
+    let res;
+    try {
+      res = await onAdd({ toimiala, megis, eurot, firstMeetingDate, signedDate, meetingCount });
+    } catch (e) {
+      res = { ok: false, error: { message: (e && e.message) || 'Tallennus epäonnistui.' } };
+    } finally {
+      setSaving(false); // AINA
+    }
     if (res && res.ok === false) {
       setError((res.error && res.error.message) ? res.error.message : 'Tallennus epäonnistui. Yritä uudelleen.');
       return; // pidä lomake auki
@@ -2140,12 +2155,22 @@ function App() {
   const isAdminRef    = useRef(false); // vakaa admin-tarkistus callbackeille
 
   function applyDerivedToPlayers(rawMap, rows, dealRows) {
+    // Jos daily/deals-haku epäonnistui, EI lasketa johdettuja arvoja vajaista
+    // riveistä — silloin näytettäisiin (ja aiemmin myös tallennettiin) liian
+    // pienet totaalit. Turvallinen degradaatio: näytä kannan omat luvut.
+    const dailyOk = !DB.fetchHealth || DB.fetchHealth.daily !== false;
+    const dealsOk = !DB.fetchHealth || DB.fetchHealth.deals !== false;
+    if (!dailyOk && !dealsOk) return rawMap;
+    // Ryhmittele kerran (oli O(pelaajat × rivit) per päivitys)
+    const rowsBy = {}, dealsBy = {};
+    if (dailyOk) rows.forEach(r => { (rowsBy[r.player_id] || (rowsBy[r.player_id] = [])).push(r); });
+    if (dealsOk) dealRows.forEach(d => { (dealsBy[d.player_id] || (dealsBy[d.player_id] = [])).push(d); });
     const out = {};
     Object.entries(rawMap).forEach(([key, p]) => {
-      const myRows  = rows.filter(r => r.player_id === key);
-      const myDeals = dealRows.filter(d => d.player_id === key);
+      const myRows  = rowsBy[key]  || [];
+      const myDeals = dealsBy[key] || [];
       let np = myRows.length > 0 ? recalcPlayerFromDailyStats(p, myRows) : p;
-      np = recalcPlayerFromDeals(np, myDeals);
+      if (dealsOk) np = recalcPlayerFromDeals(np, myDeals);
       out[key] = np;
     });
     return out;
@@ -2207,8 +2232,13 @@ function App() {
       setPlayout(pout);
       setDbBackend(DB.backend);
 
-      // Persist corrected totals back to DB
-      Object.values(players).forEach(p => DB.upsertPlayer(p));
+      // HUOM: ennen tässä kirjoitettiin KAIKKI pelaajarivit takaisin kantaan
+      // jokaisella sivunlatauksella ("persist corrected totals"). Se oli sekä
+      // tilastojen katoamisen syy (vajaasta daily-hausta lasketut totaalit
+      // tallentuivat pysyvästi) että realtime-myrskyn lähde (N kirjoitusta →
+      // N tapahtumaa → jokainen klientti haki koko taulun uudelleen N kertaa).
+      // Totaalit lasketaan nyt näyttöä varten lennossa; kanta päivittyy vain
+      // pelaajan omista kirjauksista.
 
       unsubP = DB.subscribe((freshMap) => {
         const recalced = applyDerivedToPlayers(freshMap, dailyRef.current, dealsRef.current);
@@ -2645,7 +2675,12 @@ function App() {
     };
     // Tallenna ensin DB:hen; jos se epäonnistuu, ÄLÄ näytä kauppaa optimistisesti
     // (aiemmin virhe niellattiin ja realtime-haku pyyhki kaupan → "katosi").
-    const res = await DB.upsertDeal(deal);
+    let res;
+    try {
+      res = await DB.upsertDeal(deal);
+    } catch (e) {
+      return { ok: false, error: { message: (e && e.message) || 'Tallennus epäonnistui.' } };
+    }
     if (res && res.ok === false) return { ok: false, error: res.error };
     const nextDeals = [...dealsRef.current.filter(d => d.id !== id), deal];
     dealsRef.current = nextDeals;

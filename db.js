@@ -32,6 +32,57 @@
     try { localStorage.setItem(LS_KEY, JSON.stringify(map)); } catch (e) { /* noop */ }
   }
 
+  // ── Haun terveys ─────────────────────────
+  // PostgREST palauttaa oletuksena enintään 1000 riviä. Ilman sivutusta haku
+  // katkesi hiljaisesti, ja koska pelaajien totaalit lasketaan daily_stats-riveistä,
+  // vajaa haku pienensi totaaleja → "tilastot katosivat historiasta".
+  const PAGE_SIZE = 1000;
+  const fetchHealth = { players: true, daily: true, deals: true };
+
+  // Aikakatkaisu: fetchillä ei ole oletusaikakatkaisua, joten hyytynyt pyyntö jäi
+  // roikkumaan ikuisesti ja UI:n "Tallennetaan…" ei koskaan poistunut.
+  let requestTimeoutMs = 15000;
+  function setRequestTimeout(ms) { requestTimeoutMs = ms; }
+
+  // Yhdistää tapahtumaryöpyn yhdeksi hauksi. Ilman tätä jokainen rivimuutos
+  // laukaisi koko taulun uudelleenhaun jokaisella klientillä (pikavalinta
+  // kirjoittaa 2 riviä → 2 täyshakua per klikki, per käyttäjä).
+  function debounced(fn, ms) {
+    let timer = null;
+    return function () {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { timer = null; fn(); }, ms);
+    };
+  }
+
+  function withTimeout(promise, label) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error((label || 'Pyyntö') + ' aikakatkaistiin — tarkista verkkoyhteys ja yritä uudelleen.'));
+      }, requestTimeoutMs);
+      Promise.resolve(promise).then(
+        (v) => { clearTimeout(timer); resolve(v); },
+        (e) => { clearTimeout(timer); reject(e); }
+      );
+    });
+  }
+
+  // Hakee taulun KOKONAAN sivuttamalla. Virhetilanteessa palauttaa null (ei vajaita
+  // rivejä) — kutsuja päättää turvallisen degradaation.
+  async function fetchPaged(table) {
+    let out = [];
+    let from = 0;
+    for (;;) {
+      const { data, error } = await client.from(table).select('*').range(from, from + PAGE_SIZE - 1);
+      if (error) { console.error('fetch ' + table + ' error:', error); return null; }
+      const batch = data || [];
+      out = out.concat(batch);
+      if (batch.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+    return out;
+  }
+
   // ── row <-> player ─────────────────────────
   function rowToPlayer(row) {
     return {
@@ -71,13 +122,11 @@
   // ── API ─────────────────────────
   async function fetchAll() {
     if (!client) return loadLocal();
-    const { data, error } = await client.from('players').select('*');
-    if (error) {
-      console.error('Supabase fetchAll error:', error);
-      return loadLocal();
-    }
+    const rows = await fetchPaged('players');
+    fetchHealth.players = rows !== null;
+    if (rows === null) return loadLocal();
     const map = {};
-    (data || []).forEach((row) => { map[row.id] = rowToPlayer(row); });
+    rows.forEach((row) => { map[row.id] = rowToPlayer(row); });
     return map;
   }
 
@@ -95,8 +144,15 @@
     if (client) {
       // players-taululla ei ole INSERT-politiikkaa (rivit luodaan vain register_player-RPC:llä),
       // joten päivitetään olemassa olevaa riviä. RLS sallii vain oman rivin (owns_player) / adminin.
-      const { error } = await client.from('players').update(playerToRow(player)).eq('id', player.key);
-      if (error) console.error('Update player error:', error);
+      // Kutsutaan usein ilman awaitia → ei saa heittää (käsittelemätön hylkäys).
+      try {
+        const { error } = await withTimeout(
+          client.from('players').update(playerToRow(player)).eq('id', player.key), 'Pelaajan päivitys');
+        if (error) { console.error('Update player error:', error); return { ok: false, error }; }
+      } catch (e) {
+        console.error('Update player exception:', e);
+        return { ok: false, error: { message: (e && e.message) || 'Verkkovirhe' } };
+      }
     } else {
       const map = loadLocal();
       map[player.key] = player;
@@ -223,9 +279,11 @@
 
   async function fetchAllDailyStats() {
     if (!client) return loadLocalDaily();
-    const { data, error } = await client.from('daily_stats').select('*');
-    if (error) { console.error('fetchAllDailyStats error:', error); return loadLocalDaily(); }
-    return data || [];
+    const rows = await fetchPaged('daily_stats');
+    fetchHealth.daily = rows !== null;
+    // Virheessä EI pudota localStorageen (se on Supabase-tilassa tyhjä/vanhentunut)
+    // eikä palauteta vajaita rivejä — kumpikin pienentäisi laskettuja totaaleja.
+    return rows || [];
   }
 
   async function upsertDailyStats(playerId, dateKey, stats) {
@@ -241,8 +299,13 @@
       updated_at: new Date().toISOString(),
     };
     if (client) {
-      const { error } = await client.from('daily_stats').upsert(row);
-      if (error) console.error('upsertDailyStats error:', error);
+      // Fire-and-forget-kutsupaikkoja → ei saa heittää.
+      try {
+        const { error } = await withTimeout(client.from('daily_stats').upsert(row), 'Päivän tallennus');
+        if (error) console.error('upsertDailyStats error:', error);
+      } catch (e) {
+        console.error('upsertDailyStats exception:', e);
+      }
     } else {
       let rows = loadLocalDaily();
       const idx = rows.findIndex(r => r.id === id);
@@ -272,14 +335,20 @@
   }
   async function fetchAllDeals() {
     if (!client) return loadLocalDeals();
-    const { data, error } = await client.from('deals').select('*');
-    if (error) { console.error('fetchAllDeals error:', error); return loadLocalDeals(); }
-    return data || [];
+    const rows = await fetchPaged('deals');
+    fetchHealth.deals = rows !== null;
+    return rows || [];
   }
   async function upsertDeal(deal) {
     if (client) {
-      const { error } = await client.from('deals').upsert(deal);
-      if (error) { console.error('upsertDeal error:', error); return { ok: false, error, deal }; }
+      // Ei saa koskaan heittää eikä roikkua — kutsuja luottaa {ok}-vastaukseen.
+      try {
+        const { error } = await withTimeout(client.from('deals').upsert(deal), 'Kaupan tallennus');
+        if (error) { console.error('upsertDeal error:', error); return { ok: false, error, deal }; }
+      } catch (e) {
+        console.error('upsertDeal exception:', e);
+        return { ok: false, error: { message: (e && e.message) || 'Verkkovirhe tallennuksessa' }, deal };
+      }
     } else {
       let rows = loadLocalDeals();
       const idx = rows.findIndex(r => r.id === deal.id);
@@ -352,19 +421,25 @@
 
   // ── Init ─────────────────────────
   async function init() {
-    const initialPlayers = await fetchAll();
-    const initialPlayoff = await fetchPlayoff();
-    const initialPlayout = await fetchPlayout();
-    const initialDaily   = await fetchAllDailyStats();
-    const initialDeals   = await fetchAllDeals();
-    const initialGoals   = await fetchGoals();
-    const initialH2H     = await fetchH2H();
+    // Rinnakkain — aiemmin 7 peräkkäistä edestakaista kutsua ketjussa, mikä
+    // hidasti ensilatausta suoraan niiden summalla.
+    const [
+      initialPlayers, initialPlayoff, initialPlayout,
+      initialDaily, initialDeals, initialGoals, initialH2H,
+    ] = await Promise.all([
+      fetchAll(), fetchPlayoff(), fetchPlayout(),
+      fetchAllDailyStats(), fetchAllDeals(), fetchGoals(), fetchH2H(),
+    ]);
     if (client) {
+      const REFRESH_MS = 400; // yhdistä ryöpyt yhdeksi hauksi
+      const refreshPlayers = debounced(async () => { const fresh = await fetchAll(); notify(fresh); }, REFRESH_MS);
+      const refreshDaily   = debounced(async () => { const fresh = await fetchAllDailyStats(); notifyDaily(fresh); }, REFRESH_MS);
+      const refreshDeals   = debounced(async () => { const fresh = await fetchAllDeals(); notifyDeals(fresh); }, REFRESH_MS);
       client
         .channel('public:players')
         .on('postgres_changes',
             { event: '*', schema: 'public', table: 'players' },
-            async () => { const fresh = await fetchAll(); notify(fresh); })
+            refreshPlayers)
         .subscribe();
       client
         .channel('public:meta')
@@ -382,13 +457,13 @@
         .channel('public:daily_stats')
         .on('postgres_changes',
             { event: '*', schema: 'public', table: 'daily_stats' },
-            async () => { const fresh = await fetchAllDailyStats(); notifyDaily(fresh); })
+            refreshDaily)
         .subscribe();
       client
         .channel('public:deals')
         .on('postgres_changes',
             { event: '*', schema: 'public', table: 'deals' },
-            async () => { const fresh = await fetchAllDeals(); notifyDeals(fresh); })
+            refreshDeals)
         .subscribe();
     } else {
       window.addEventListener('storage', (e) => {
@@ -439,6 +514,8 @@
     isConfigured,
     backend: client ? 'supabase' : 'local',
     hasAuth,
+    fetchHealth,
+    setRequestTimeout,
     signUp, signIn, signOut, getSession, onAuthChange,
     registerPlayer, linkExistingPlayer, fetchUnlinkedPlayers, fetchMyPlayer,
     init,
