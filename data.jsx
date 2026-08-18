@@ -254,29 +254,55 @@ const WEEKDAY_DATE_KEYS = [
 function weekdayIndexToDateKey(idx) { return WEEKDAY_DATE_KEYS[idx] ?? null; }
 function dateKeyToWeekdayIndex(key) { return WEEKDAY_DATE_KEYS.indexOf(key); }
 
-// Laskee pelaajan yhteistilastot päiväkohtaisista riveistä
-function recalcPlayerFromDailyStats(player, myRows) {
-  let luurit = 0, vastatut = 0, buukit = 0, tapaamiset = 0;
-  myRows.forEach(r => { luurit += (r.luurit||0); vastatut += (r.vastatut||0); buukit += (r.buukit||0); tapaamiset += (r.tapaamiset||0); });
+// ── Kalenteripohjainen putki + trendi ────────────────────────────────────────
+// HUOM: nämä laskettiin aiemmin kisakalenterista (WEEKDAY_DATE_KEYS, 25.5–18.6.2026).
+// Kisan päätyttyä uudet kirjaukset eivät osuneet siihen lainkaan, joten putki ja
+// trendipalkit nollautuivat aina kun tilat laskettiin uudelleen — käyttäjälle tämä
+// näkyi niin että kirjatut tulokset "katosivat yön aikana".
+const isWeekend = (d) => { const g = d.getDay(); return g === 0 || g === 6; };
 
-  const dayIdx = Math.max(0, Math.min(9, currentWeekdayIndex() >= 0 ? currentWeekdayIndex() : 0));
-  const weekOffset = dayIdx >= 5 ? 5 : 0;
-  const last5 = [0, 0, 0, 0, 0];
+// N viimeisintä päivää vanhimmasta uusimpaan: tämä päivä on AINA viimeinen slotti,
+// ja siitä taaksepäin otetaan vain arkipäiviä (viikonloput eivät syö slotteja).
+function recentDayKeys(n, refDate) {
+  const d = refDate ? new Date(refDate) : new Date();
+  d.setHours(12, 0, 0, 0); // keskipäivä → ei kesäaika-reunatapauksia
+  const out = [localDateKey(d)];
+  while (out.length < n) {
+    d.setDate(d.getDate() - 1);
+    if (!isWeekend(d)) out.push(localDateKey(d));
+  }
+  return out.reverse();
+}
+
+// Käynnissä oleva buukkiputki: peräkkäisiä arkipäiviä joina on vähintään 1 buukki.
+// Viikonloppu ei katkaise putkea. Jos tälle päivälle ei ole vielä buukkeja, putki
+// lasketaan edellisestä arkipäivästä (muuten putki näyttäisi nollaa joka aamu).
+function currentBuukitStreak(buukitByDate, refDate) {
+  const d = refDate ? new Date(refDate) : new Date();
+  d.setHours(12, 0, 0, 0);
+  const stepBack = () => { do { d.setDate(d.getDate() - 1); } while (isWeekend(d)); };
+  if (!((buukitByDate[localDateKey(d)] || 0) > 0)) stepBack();
+  let streak = 0;
+  for (let guard = 0; guard < 500; guard++) {
+    if ((buukitByDate[localDateKey(d)] || 0) > 0) streak++; else break;
+    stepBack();
+  }
+  return streak;
+}
+
+// Laskee pelaajan yhteistilastot päiväkohtaisista riveistä
+function recalcPlayerFromDailyStats(player, myRows, refDate) {
+  let luurit = 0, vastatut = 0, buukit = 0, tapaamiset = 0;
+  const buukitByDate = {};
   myRows.forEach(r => {
-    const idx = dateKeyToWeekdayIndex(r.date_key);
-    if (idx >= weekOffset && idx < weekOffset + 5) last5[idx - weekOffset] = (r.buukit || 0);
+    luurit += (r.luurit||0); vastatut += (r.vastatut||0);
+    buukit += (r.buukit||0); tapaamiset += (r.tapaamiset||0);
+    buukitByDate[r.date_key] = (buukitByDate[r.date_key] || 0) + (r.buukit || 0);
   });
 
-  const buuksByDay = {};
-  myRows.forEach(r => { buuksByDay[dateKeyToWeekdayIndex(r.date_key)] = r.buukit || 0; });
-  let streak = 0;
-  for (let i = dayIdx; i >= 0; i--) {
-    if ((buuksByDay[i] || 0) > 0) streak++; else break;
-  }
-
-  const todayB = buuksByDay[dayIdx] || 0;
-  const yesterB = dayIdx > 0 ? (buuksByDay[dayIdx - 1] || 0) : 0;
-  const trendN = todayB - yesterB;
+  const last5 = recentDayKeys(5, refDate).map(k => buukitByDate[k] || 0);
+  const streak = currentBuukitStreak(buukitByDate, refDate);
+  const trendN = last5[4] - last5[3];
 
   return { ...player, luurit, vastatut, buukit, tapaamiset, last5, streak, trendN };
 }
@@ -630,5 +656,6 @@ Object.assign(window, {
   EMPTY_PLAYOFF, MATCH_ORDER,
   setMatchWinner, clearMatchWinner, startPlayoffs, resetPlayoffs, recomputeAdvancement, migratePlayoff,
   WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats, recalcPlayerFromDeals, dealLeadTimeDays, newDealId,
+  recentDayKeys, currentBuukitStreak,
   EMPTY_PLAYOUT, startPlayout, setSakko, clearSakko, resetPlayout,
 });

@@ -2588,22 +2588,21 @@ function App() {
     } else if (kind === 'buukki') {
       if (cur.buukit >= cur.vastatut) return;
       next.buukit = cur.buukit + 1;
-      const slot = Math.max(0, Math.min(4, currentWeekdayIndex() % 5));
+      // Tämä päivä on aina last5:n viimeinen slotti (ks. recentDayKeys data.jsx:ssä)
       const newLast5 = [...cur.last5];
-      newLast5[slot] = (newLast5[slot] || 0) + 1;
+      newLast5[4] = (newLast5[4] || 0) + 1;
       next.last5 = newLast5;
-      if ((cur.last5[slot] || 0) === 0) next.streak = cur.streak + 1;
-      next.trendN = Math.max(cur.trendN, 0) + 1;
+      if ((cur.last5[4] || 0) === 0) next.streak = cur.streak + 1; // ensimmäinen buukki tänään jatkaa putkea
+      next.trendN = newLast5[4] - (newLast5[3] || 0);
       resultingNote = `BUUKKI #${next.buukit}`;
     } else if (kind === '-buukki') {
       if (cur.buukit <= 0) return;
       next.buukit = cur.buukit - 1;
-      const slot = Math.max(0, Math.min(4, currentWeekdayIndex() % 5));
       const newLast5 = [...cur.last5];
-      newLast5[slot] = Math.max(0, (newLast5[slot] || 0) - 1);
+      newLast5[4] = Math.max(0, (newLast5[4] || 0) - 1);
       next.last5 = newLast5;
-      if (newLast5[slot] === 0 && (cur.last5[slot] || 0) === 1) next.streak = Math.max(0, cur.streak - 1);
-      next.trendN = Math.min(cur.trendN, 0) - 1;
+      if (newLast5[4] === 0 && (cur.last5[4] || 0) === 1) next.streak = Math.max(0, cur.streak - 1);
+      next.trendN = newLast5[4] - (newLast5[3] || 0);
       resultingNote = 'BUUKKI PERUTTU';
     } else if (kind === 'tapaaminen') {
       next.tapaamiset = (cur.tapaamiset || 0) + 1;
