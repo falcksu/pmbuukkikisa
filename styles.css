@@ -2754,3 +2754,13 @@ body { font-size: 14px; }
 .hof-mvp-nick { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 14px; }
 .hof-mvp-buukit { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent); font-weight: 700; }
 .hof-empty { font-size: 13px; color: var(--ink-4); font-style: italic; }
+
+/* ── Yhteysvirhe: konfiguroitu Supabaseen mutta yhteyttä ei saatu ───────────── */
+.conn-error-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+.conn-error { max-width: 560px; background: var(--bg-2); border: 2px solid #c0392b; border-radius: 10px; padding: 28px 30px; box-shadow: 0 10px 34px rgba(0,0,0,.14); }
+.conn-error-badge { display: inline-block; background: #c0392b; color: #fff; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 12px; letter-spacing: .12em; padding: 4px 10px; border-radius: 3px; }
+.conn-error-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 30px; letter-spacing: .02em; text-transform: uppercase; margin: 14px 0 10px; color: var(--ink); }
+.conn-error-lead { font-size: 15px; line-height: 1.55; color: var(--ink); margin: 0 0 16px; }
+.conn-error-steps { margin: 0 0 22px; padding-left: 20px; color: var(--ink-3); font-size: 14px; line-height: 1.75; }
+.conn-error-btn { width: 100%; padding: 12px; background: var(--accent, #ff4a1a); color: #fff; border: none; border-radius: 5px; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 16px; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.conn-error-btn:hover { filter: brightness(1.08); }

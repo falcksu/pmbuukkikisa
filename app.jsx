@@ -1749,6 +1749,31 @@ function authErrorFi(err) {
 }
 
 // Oikea autentikointi (tuotanto). linkStep=true: sessio on, mutta pelaaja puuttuu.
+// Näytetään kun sovellus on konfiguroitu Supabaseen mutta yhteyttä ei saatu
+// (SDK:n CDN estetty/ei latautunut). Ilman tätä sovellus putosi hiljaa localStorageen:
+// kirjaukset näyttivät tallentuvan ja säilyivät latauksesta toiseen, mutta mikään
+// ei päätynyt kantaan — luvut eivät näkyneet kenellekään muulle.
+function ConnectionErrorScreen() {
+  return (
+    <div className="conn-error-wrap">
+      <div className="conn-error">
+        <div className="conn-error-badge">YHTEYSVIRHE</div>
+        <h1 className="conn-error-title">Tietokantayhteyttä ei saatu</h1>
+        <p className="conn-error-lead">
+          <strong>Älä kirjaa tuloksia nyt.</strong> Kirjaukset eivät tallentuisi mihinkään
+          eivätkä näkyisi muille.
+        </p>
+        <ol className="conn-error-steps">
+          <li>Lataa sivu uudelleen.</li>
+          <li>Jos virhe toistuu, kokeile toista verkkoa (esim. mobiilidata) tai toista selainta.</li>
+          <li>Mainosten- tai skriptinesto voi estää yhteyden — poista se tältä sivustolta käytöstä.</li>
+        </ol>
+        <button className="conn-error-btn" onClick={() => window.location.reload()}>Lataa uudelleen</button>
+      </div>
+    </div>
+  );
+}
+
 function AuthScreen({ linkStep, onLinked }) {
   const [tab, setTab] = useState(linkStep ? 'register' : 'login');
   const [email, setEmail] = useState('');
@@ -2731,6 +2756,12 @@ function App() {
       ]);
     }
   }, [currentKey, dailyStats, playersMap]);
+
+  // ── Yhteysvahti ─────────────────────────
+  // Konfiguroitu Supabaseen mutta yhteyttä ei ole → estä kirjaaminen kokonaan.
+  if (DB.offlineMisconfig) {
+    return <ConnectionErrorScreen />;
+  }
 
   // ── Auth gate ───────────────────────────
   if (DB.hasAuth) {

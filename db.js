@@ -21,6 +21,15 @@
     }
   }
 
+  // Konfiguroitu Supabaseen, mutta asiakasta ei saatu luotua (SDK:n CDN estetty,
+  // ei latautunut, tai createClient heitti). TÄSSÄ TILASSA EI SAA hiljaa pudota
+  // localStorageen: käyttäjä näkisi kirjaustensa tallentuvan ja säilyvän latauksesta
+  // toiseen, mutta mikään ei päätyisi kantaan. Sovellus estää kirjaamisen tässä tilassa.
+  const offlineMisconfig = isConfigured && !client;
+  if (offlineMisconfig) {
+    console.error('Supabase on konfiguroitu mutta yhteyttä ei saatu — kirjaaminen estetty.');
+  }
+
   // ── localStorage helpers ─────────────────────────
   function loadLocal() {
     try {
@@ -514,6 +523,7 @@
     isConfigured,
     backend: client ? 'supabase' : 'local',
     hasAuth,
+    offlineMisconfig,
     fetchHealth,
     setRequestTimeout,
     signUp, signIn, signOut, getSession, onAuthChange,
