@@ -25,6 +25,7 @@ const DB = sandbox.window.DB;
   assert(all.length === 0, 'deleteDeal poistaa');
 
   // tapaamiset kulkee upsertDailyStats:n läpi
-  const row = await DB.upsertDailyStats('a', '2026-06-22', { luurit:5, vastatut:3, buukit:1, tapaamiset:2 });
-  assert(row.tapaamiset === 2, 'upsertDailyStats säilyttää tapaamiset');
+  const res = await DB.upsertDailyStats('a', '2026-06-22', { luurit:5, vastatut:3, buukit:1, tapaamiset:2 });
+  assert(res.ok === true, 'upsertDailyStats palauttaa ok:true');
+  assert(res.row.tapaamiset === 2, 'upsertDailyStats säilyttää tapaamiset');
 })();

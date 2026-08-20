@@ -60,3 +60,31 @@ const DEAL = { id: 'a_2026-08-18_x', player_id: 'a', date_key: '2026-08-18', meg
     assert(res && res.ok === true, 'onnistunut tallennus palauttaa ok:true');
   }
 })();
+
+// 4) upsertDailyStats: sama takuu — ei heitä, ei roiku, kertoo virheestä.
+//    Ilman tätä pikavalinnan kirjaus katosi hiljaa (käyttäjä näki luvun kasvavan).
+(async () => {
+  const { load: load2, makeLocalStorage: mls2, assert: a2 } = require('./_harness');
+  function loadDB2(impl) {
+    const win = {
+      SUPABASE_CONFIG: { url: 'https://example.supabase.co', anonKey: 'anon-key' },
+      supabase: { createClient() { return {
+        auth: {}, channel() { const c={on(){return c;},subscribe(){return c;}}; return c; },
+        from() { return { upsert: impl, select(){ return { range: () => Promise.resolve({data:[],error:null}) }; } }; },
+      }; } },
+    };
+    return load2('db.js', { window: win, localStorage: mls2() }).window.DB;
+  }
+  const DBh = loadDB2(() => new Promise(() => {}));
+  DBh.setRequestTimeout(80);
+  const r1 = await DBh.upsertDailyStats('a', '2026-08-20', { luurit:1, vastatut:0, buukit:0, tapaamiset:0 });
+  a2(r1 && r1.ok === false, 'hyytynyt päivätallennus → ok:false (ei jää roikkumaan)');
+
+  const DBe = loadDB2(() => Promise.reject(new Error('Failed to fetch')));
+  DBe.setRequestTimeout(500);
+  let threw2 = false, r2 = null;
+  try { r2 = await DBe.upsertDailyStats('a', '2026-08-20', { luurit:1, vastatut:0, buukit:0, tapaamiset:0 }); }
+  catch (e) { threw2 = true; }
+  a2(threw2 === false, 'verkkovirhe päivätallennuksessa ei heitä kutsujalle');
+  a2(r2 && r2.ok === false, 'verkkovirhe päivätallennuksessa → ok:false');
+})();

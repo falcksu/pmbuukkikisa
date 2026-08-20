@@ -2764,3 +2764,12 @@ body { font-size: 14px; }
 .conn-error-steps { margin: 0 0 22px; padding-left: 20px; color: var(--ink-3); font-size: 14px; line-height: 1.75; }
 .conn-error-btn { width: 100%; padding: 12px; background: var(--accent, #ff4a1a); color: #fff; border: none; border-radius: 5px; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 16px; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
 .conn-error-btn:hover { filter: brightness(1.08); }
+
+/* ── Näkyvä virhe kun kirjaus ei tallentunut ────────────────────────────────── */
+.save-error-banner { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 12px 14px; background: #fdecea; border: 2px solid #c0392b; border-radius: 6px; color: #7d2018; font-size: 14px; line-height: 1.45; }
+.seb-icon { font-size: 20px; flex: none; }
+.seb-text { flex: 1; }
+.seb-detail { opacity: .75; font-size: 12.5px; }
+.seb-reload { flex: none; padding: 7px 14px; background: #c0392b; color: #fff; border: none; border-radius: 4px; font-weight: 700; font-size: 13px; cursor: pointer; }
+.seb-reload:hover { filter: brightness(1.1); }
+.seb-x { flex: none; background: none; border: none; color: #7d2018; font-size: 16px; cursor: pointer; padding: 2px 6px; }

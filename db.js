@@ -308,12 +308,14 @@
       updated_at: new Date().toISOString(),
     };
     if (client) {
-      // Fire-and-forget-kutsupaikkoja → ei saa heittää.
+      // Ei saa heittää eikä roikkua — kutsuja luottaa {ok}-vastaukseen ja
+      // perii optimistisen päivityksen takaisin jos tallennus epäonnistui.
       try {
         const { error } = await withTimeout(client.from('daily_stats').upsert(row), 'Päivän tallennus');
-        if (error) console.error('upsertDailyStats error:', error);
+        if (error) { console.error('upsertDailyStats error:', error); return { ok: false, error, row }; }
       } catch (e) {
         console.error('upsertDailyStats exception:', e);
+        return { ok: false, error: { message: (e && e.message) || 'Verkkovirhe tallennuksessa' }, row };
       }
     } else {
       let rows = loadLocalDaily();
@@ -322,7 +324,7 @@
       saveLocalDaily(rows);
       notifyDaily(rows);
     }
-    return row;
+    return { ok: true, row };
   }
 
   // ── Deals (kaupat) ─────────────────────────

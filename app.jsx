@@ -1753,6 +1753,23 @@ function authErrorFi(err) {
 // (SDK:n CDN estetty/ei latautunut). Ilman tätä sovellus putosi hiljaa localStorageen:
 // kirjaukset näyttivät tallentuvan ja säilyivät latauksesta toiseen, mutta mikään
 // ei päätynyt kantaan — luvut eivät näkyneet kenellekään muulle.
+// Näkyvä varoitus kun kirjaus EI tallentunut kantaan. Aiemmin tällainen virhe
+// meni vain konsoliin ja optimistinen luku jäi ruudulle → käyttäjä luuli kirjanneensa.
+function SaveErrorBanner({ message, onDismiss }) {
+  if (!message) return null;
+  return (
+    <div className="save-error-banner" role="alert">
+      <span className="seb-icon">⚠️</span>
+      <span className="seb-text">
+        <strong>Kirjaus ei tallentunut.</strong> Luku palautettiin, koska sitä ei saatu talteen.
+        Tarkista verkkoyhteys ja kirjaa uudelleen. <span className="seb-detail">({message})</span>
+      </span>
+      <button className="seb-reload" onClick={() => window.location.reload()}>Lataa uudelleen</button>
+      <button className="seb-x" onClick={onDismiss} aria-label="Sulje">✕</button>
+    </div>
+  );
+}
+
 function ConnectionErrorScreen() {
   return (
     <div className="conn-error-wrap">
@@ -2168,6 +2185,7 @@ function App() {
   const [customEnd, setCustomEnd] = useState(() => localDateKey(new Date()));
   const [rankBy, setRankBy] = useState('buukit'); // buukit | megis | eurot | tapaamiset
   const [dealModalOpen, setDealModalOpen] = useState(false); // etusivun kauppamodaali
+  const [saveError, setSaveError] = useState(null); // näkyvä virhe kun kirjaus ei tallennu
 
   // DB init + realtime subscribe
   const playersMapRef = useRef({});
@@ -2636,30 +2654,45 @@ function App() {
       return;
     }
 
-    // Aseta pelaajatila + synkronoi ref
+    // Laske päivärivin uusi tila SYNKRONISESTI, jotta tallennuksen tulos voidaan
+    // tarkistaa ja optimistinen päivitys perua jos kirjoitus ei mene läpi.
+    const dateKey2 = localDateKey(new Date());
+    const prevDaily = dailyRef.current || [];
+    const existingRow = prevDaily.find(r => r.player_id === currentKey && r.date_key === dateKey2);
+    const ds = existingRow
+      ? { luurit: existingRow.luurit, vastatut: existingRow.vastatut, buukit: existingRow.buukit, tapaamiset: existingRow.tapaamiset || 0 }
+      : { luurit: 0, vastatut: 0, buukit: 0, tapaamiset: 0 };
+    if (kind === 'luuri')           ds.luurit++;
+    else if (kind === 'vastattu')   ds.vastatut++;
+    else if (kind === 'buukki')     ds.buukit++;
+    else if (kind === '-buukki')    ds.buukit = Math.max(0, ds.buukit - 1);
+    else if (kind === 'tapaaminen') ds.tapaamiset++;
+    const updatedRow = { id: currentKey + '_' + dateKey2, player_id: currentKey, date_key: dateKey2, ...ds };
+    const nextDaily = [...prevDaily.filter(r => !(r.player_id === currentKey && r.date_key === dateKey2)), updatedRow];
+
+    // Optimistinen päivitys näytölle
     playersMapRef.current = { ...playersMapRef.current, [currentKey]: next };
     setPlayersMap((prev) => ({ ...prev, [currentKey]: next }));
-    DB.upsertPlayer(next);
+    dailyRef.current = nextDaily;
+    setDailyStats(nextDaily);
 
-    // Also update daily_stats for today (fire-and-forget)
-    // Kirjaa aina oikealle kalenteripäivälle (ei kisakalenteriin)
-    const dateKey2 = localDateKey(new Date());
-    if (dateKey2 && (kind === 'luuri' || kind === 'vastattu' || kind === 'buukki' || kind === '-buukki' || kind === 'tapaaminen')) {
-      setDailyStats(prev => {
-        const existing = prev.find(r => r.player_id === currentKey && r.date_key === dateKey2);
-        const ds = existing
-          ? { luurit: existing.luurit, vastatut: existing.vastatut, buukit: existing.buukit, tapaamiset: existing.tapaamiset || 0 }
-          : { luurit: 0, vastatut: 0, buukit: 0, tapaamiset: 0 };
-        if (kind === 'luuri')     ds.luurit++;
-        else if (kind === 'vastattu') ds.vastatut++;
-        else if (kind === 'buukki')   ds.buukit++;
-        else if (kind === '-buukki')  ds.buukit = Math.max(0, ds.buukit - 1);
-        else if (kind === 'tapaaminen') ds.tapaamiset++;
-        const updated = { id: currentKey+'_'+dateKey2, player_id: currentKey, date_key: dateKey2, ...ds };
-        DB.upsertDailyStats(currentKey, dateKey2, ds);
-        return [...prev.filter(r => !(r.player_id === currentKey && r.date_key === dateKey2)), updated];
-      });
-    }
+    // Tallenna kantaan JA tarkista tulos. Aiemmin tulos jätettiin huomiotta, joten
+    // epäonnistunut kirjaus näytti käyttäjälle onnistuneelta — luku kasvoi ruudulla
+    // mutta mitään ei tallentunut eikä kukaan muu nähnyt sitä.
+    (async () => {
+      const res = await DB.upsertDailyStats(currentKey, dateKey2, ds);
+      if (res && res.ok === false) {
+        // Peru optimistinen päivitys ja kerro käyttäjälle
+        playersMapRef.current = { ...playersMapRef.current, [currentKey]: cur };
+        setPlayersMap((prev) => ({ ...prev, [currentKey]: cur }));
+        dailyRef.current = prevDaily;
+        setDailyStats(prevDaily);
+        setSaveError((res.error && res.error.message) || 'Kirjaus ei tallentunut.');
+        return;
+      }
+      setSaveError(null);
+      DB.upsertPlayer(next);
+    })();
 
     setFlashKey(currentKey);
     setTimeout(() => setFlashKey(null), 900);
@@ -2808,6 +2841,7 @@ function App() {
     return (
       <div className="app">
         <Header me={me} onLogout={handleLogout} playerCount={sorted.length} isAdmin today={today} dbBackend={dbBackend} />
+        <SaveErrorBanner message={saveError} onDismiss={() => setSaveError(null)} />
         {t.showTicker && <Ticker items={tickerFeed} paused={!t.pulse} />}
         <TabNav active={activeTab} onChange={setActiveTab} isAdmin />
         {activeTab === 'report' || activeTab === 'teamreport' ? (
@@ -2875,6 +2909,7 @@ function App() {
   return (
     <div className="app">
       <Header me={me} onLogout={handleLogout} playerCount={sortedPublic.length} today={today} dbBackend={dbBackend} />
+      <SaveErrorBanner message={saveError} onDismiss={() => setSaveError(null)} />
       {t.showTicker && <Ticker items={tickerFeed} paused={!t.pulse} />}
       <TabNav active={activeTab} onChange={setActiveTab} isAdmin={false} />
       {activeTab === 'teamreport' ? (
