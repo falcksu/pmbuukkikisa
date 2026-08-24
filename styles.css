@@ -2773,3 +2773,7 @@ body { font-size: 14px; }
 .seb-reload { flex: none; padding: 7px 14px; background: #c0392b; color: #fff; border: none; border-radius: 4px; font-weight: 700; font-size: 13px; cursor: pointer; }
 .seb-reload:hover { filter: brightness(1.1); }
 .seb-x { flex: none; background: none; border: none; color: #7d2018; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+.save-warn-banner { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 11px 14px; background: #fff6e0; border: 2px solid #d79a1e; border-radius: 6px; color: #6b4a05; font-size: 14px; line-height: 1.45; }
+.swb-icon { font-size: 18px; flex: none; }
+.swb-text { flex: 1; }
+.swb-x { flex: none; background: none; border: none; color: #6b4a05; font-size: 16px; cursor: pointer; padding: 2px 6px; }

@@ -1770,6 +1770,18 @@ function SaveErrorBanner({ message, onDismiss }) {
   );
 }
 
+// Kirjaus MENI läpi, mutta jokin vaatii huomiota (esim. laitteen kello väärässä).
+function SaveWarningBanner({ message, onDismiss }) {
+  if (!message) return null;
+  return (
+    <div className="save-warn-banner" role="status">
+      <span className="swb-icon">🕒</span>
+      <span className="swb-text"><strong>Kirjaus tallentui.</strong> {message}</span>
+      <button className="swb-x" onClick={onDismiss} aria-label="Sulje">✕</button>
+    </div>
+  );
+}
+
 function ConnectionErrorScreen() {
   return (
     <div className="conn-error-wrap">
@@ -2186,6 +2198,7 @@ function App() {
   const [rankBy, setRankBy] = useState('buukit'); // buukit | megis | eurot | tapaamiset
   const [dealModalOpen, setDealModalOpen] = useState(false); // etusivun kauppamodaali
   const [saveError, setSaveError] = useState(null); // näkyvä virhe kun kirjaus ei tallennu
+  const [saveWarning, setSaveWarning] = useState(null); // näkyvä varoitus (kirjaus tallentui, mutta jokin vaatii huomiota)
 
   // DB init + realtime subscribe
   const playersMapRef = useRef({});
@@ -2654,45 +2667,49 @@ function App() {
       return;
     }
 
-    // Laske päivärivin uusi tila SYNKRONISESTI, jotta tallennuksen tulos voidaan
-    // tarkistaa ja optimistinen päivitys perua jos kirjoitus ei mene läpi.
+    // Kenttä ja MUUTOS (ei absoluuttista arvoa). Palvelin kasvattaa lukua
+    // atomisesti, joten vanhentunut paikallinen kopio ei voi enää ylikirjoittaa
+    // tuoreempaa lukua — tämä oli kirjausten katoamisen pääsyy.
+    const FIELD = { luuri: 'luurit', vastattu: 'vastatut', buukki: 'buukit', '-buukki': 'buukit', tapaaminen: 'tapaamiset' };
+    const field = FIELD[kind];
+    const delta = kind === '-buukki' ? -1 : 1;
     const dateKey2 = localDateKey(new Date());
     const prevDaily = dailyRef.current || [];
-    const existingRow = prevDaily.find(r => r.player_id === currentKey && r.date_key === dateKey2);
-    const ds = existingRow
-      ? { luurit: existingRow.luurit, vastatut: existingRow.vastatut, buukit: existingRow.buukit, tapaamiset: existingRow.tapaamiset || 0 }
-      : { luurit: 0, vastatut: 0, buukit: 0, tapaamiset: 0 };
-    if (kind === 'luuri')           ds.luurit++;
-    else if (kind === 'vastattu')   ds.vastatut++;
-    else if (kind === 'buukki')     ds.buukit++;
-    else if (kind === '-buukki')    ds.buukit = Math.max(0, ds.buukit - 1);
-    else if (kind === 'tapaaminen') ds.tapaamiset++;
-    const updatedRow = { id: currentKey + '_' + dateKey2, player_id: currentKey, date_key: dateKey2, ...ds };
-    const nextDaily = [...prevDaily.filter(r => !(r.player_id === currentKey && r.date_key === dateKey2)), updatedRow];
 
-    // Optimistinen päivitys näytölle
+    // Optimistinen päivitys näytölle (palvelimen vastaus korjaa tämän hetkessä)
     playersMapRef.current = { ...playersMapRef.current, [currentKey]: next };
     setPlayersMap((prev) => ({ ...prev, [currentKey]: next }));
-    dailyRef.current = nextDaily;
-    setDailyStats(nextDaily);
 
-    // Tallenna kantaan JA tarkista tulos. Aiemmin tulos jätettiin huomiotta, joten
-    // epäonnistunut kirjaus näytti käyttäjälle onnistuneelta — luku kasvoi ruudulla
-    // mutta mitään ei tallentunut eikä kukaan muu nähnyt sitä.
     (async () => {
-      const res = await DB.upsertDailyStats(currentKey, dateKey2, ds);
+      const res = await DB.bumpDailyStat(field, delta, dateKey2);
       if (res && res.ok === false) {
-        // Peru optimistinen päivitys ja kerro käyttäjälle
+        // Peru optimistinen päivitys ja kerro käyttäjälle — ei haamulukuja
         playersMapRef.current = { ...playersMapRef.current, [currentKey]: cur };
         setPlayersMap((prev) => ({ ...prev, [currentKey]: cur }));
-        dailyRef.current = prevDaily;
-        setDailyStats(prevDaily);
         setSaveError((res.error && res.error.message) || 'Kirjaus ei tallentunut.');
         return;
       }
       setSaveError(null);
-      DB.upsertPlayer(next);
+      // Käytä PALVELIMEN palauttamaa riviä totuutena (ei clientin laskelmaa)
+      const srv = res && res.row;
+      if (srv && srv.date_key) {
+        const merged = [
+          ...(dailyRef.current || []).filter(r => !(r.player_id === (srv.player_id || currentKey) && r.date_key === srv.date_key)),
+          { id: srv.id, player_id: srv.player_id || currentKey, date_key: srv.date_key,
+            luurit: srv.luurit || 0, vastatut: srv.vastatut || 0, buukit: srv.buukit || 0, tapaamiset: srv.tapaamiset || 0 },
+        ];
+        dailyRef.current = merged;
+        setDailyStats(merged);
+        // Jos palvelimen päivä poikkeaa laitteen päivästä, laitteen kello on väärässä
+        if (srv.date_key !== dateKey2) {
+          setSaveWarning('Laitteesi päivämäärä on ' + dateKey2 + ', palvelimen ' + srv.date_key +
+            '. Kirjaus tallennettiin oikein palvelimen päivälle, mutta korjaa laitteen kellonaika — muuten omat raporttinäkymäsi näyttävät väärää päivää.');
+        } else {
+          setSaveWarning(null);
+        }
+      }
     })();
+    void prevDaily;
 
     setFlashKey(currentKey);
     setTimeout(() => setFlashKey(null), 900);
@@ -2767,7 +2784,12 @@ function App() {
 
   const handleSaveDay = useCallback(async (dateKey, stats) => {
     if (!currentKey || currentKey === ADMIN_KEY || isAdminRef.current) return;
-    await DB.upsertDailyStats(currentKey, dateKey, stats);
+    const saveRes = await DB.setDailyStatsRemote(dateKey, stats);
+    if (saveRes && saveRes.ok === false) {
+      setSaveError((saveRes.error && saveRes.error.message) || 'Päivän tallennus epäonnistui.');
+      return;
+    }
+    setSaveError(null);
     const updatedDaily = [
       ...dailyStats.filter(r => !(r.player_id === currentKey && r.date_key === dateKey)),
       { id: currentKey+'_'+dateKey, player_id: currentKey, date_key: dateKey, ...stats },
@@ -2842,6 +2864,7 @@ function App() {
       <div className="app">
         <Header me={me} onLogout={handleLogout} playerCount={sorted.length} isAdmin today={today} dbBackend={dbBackend} />
         <SaveErrorBanner message={saveError} onDismiss={() => setSaveError(null)} />
+        <SaveWarningBanner message={saveWarning} onDismiss={() => setSaveWarning(null)} />
         {t.showTicker && <Ticker items={tickerFeed} paused={!t.pulse} />}
         <TabNav active={activeTab} onChange={setActiveTab} isAdmin />
         {activeTab === 'report' || activeTab === 'teamreport' ? (
@@ -2910,6 +2933,7 @@ function App() {
     <div className="app">
       <Header me={me} onLogout={handleLogout} playerCount={sortedPublic.length} today={today} dbBackend={dbBackend} />
       <SaveErrorBanner message={saveError} onDismiss={() => setSaveError(null)} />
+      <SaveWarningBanner message={saveWarning} onDismiss={() => setSaveWarning(null)} />
       {t.showTicker && <Ticker items={tickerFeed} paused={!t.pulse} />}
       <TabNav active={activeTab} onChange={setActiveTab} isAdmin={false} />
       {activeTab === 'teamreport' ? (

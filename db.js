@@ -295,6 +295,58 @@
     return rows || [];
   }
 
+  // Atominen kasvatus palvelimella. Client EI enää laske absoluuttisia lukuja
+  // omasta (mahdollisesti vanhentuneesta) kopiostaan — se lähettää vain muutoksen
+  // (+1 / -1) ja palvelin kasvattaa lukua transaktiossa. Tämä poistaa "lost update"
+  // -luokan: kaksi välilehteä/laitetta tai katkennut realtime ei voi enää
+  // ylikirjoittaa tuoreempaa lukua vanhalla. Palvelin päättää myös päivämäärän,
+  // joten laitteen väärä kello ei arkistoi kirjausta väärälle päivälle.
+  async function bumpDailyStat(field, delta, clientDate) {
+    if (!client) {
+      // dev-local: sama semantiikka paikallisesti
+      const rows = loadLocalDaily();
+      const dateKey = clientDate || new Date().toISOString().slice(0, 10);
+      const id = '__local__' + '_' + dateKey;
+      let row = rows.find(r => r.id === id);
+      if (!row) { row = { id, player_id: '__local__', date_key: dateKey, luurit:0, vastatut:0, buukit:0, tapaamiset:0 }; rows.push(row); }
+      row[field] = Math.max(0, (row[field] || 0) + delta);
+      saveLocalDaily(rows); notifyDaily(rows);
+      return { ok: true, row };
+    }
+    try {
+      const { data, error } = await withTimeout(
+        client.rpc('bump_daily_stat', { p_field: field, p_delta: delta, p_client_date: clientDate || null }),
+        'Kirjauksen tallennus');
+      if (error) { console.error('bumpDailyStat error:', error); return { ok: false, error }; }
+      const row = Array.isArray(data) ? data[0] : data;
+      return { ok: true, row };
+    } catch (e) {
+      console.error('bumpDailyStat exception:', e);
+      return { ok: false, error: { message: (e && e.message) || 'Verkkovirhe tallennuksessa' } };
+    }
+  }
+
+  // Päiväraportin tallennus palvelimen kautta: asettaa päivän luvut ja kirjaa
+  // muutoksen tapahtumalokiin, jolloin vahingossa tapahtunut ylikirjoitus on
+  // aina palautettavissa.
+  async function setDailyStatsRemote(dateKey, stats) {
+    if (!client) return upsertDailyStats('__local__', dateKey, stats);
+    try {
+      const { data, error } = await withTimeout(client.rpc('set_daily_stats', {
+        p_date_key: dateKey,
+        p_luurit: Math.max(0, stats.luurit || 0),
+        p_vastatut: Math.max(0, stats.vastatut || 0),
+        p_buukit: Math.max(0, stats.buukit || 0),
+        p_tapaamiset: Math.max(0, stats.tapaamiset || 0),
+      }), 'Päivän tallennus');
+      if (error) { console.error('setDailyStats error:', error); return { ok: false, error }; }
+      return { ok: true, row: Array.isArray(data) ? data[0] : data };
+    } catch (e) {
+      console.error('setDailyStats exception:', e);
+      return { ok: false, error: { message: (e && e.message) || 'Verkkovirhe tallennuksessa' } };
+    }
+  }
+
   async function upsertDailyStats(playerId, dateKey, stats) {
     const id = playerId + '_' + dateKey;
     const row = {
@@ -443,6 +495,20 @@
     ]);
     if (client) {
       const REFRESH_MS = 400; // yhdistä ryöpyt yhdeksi hauksi
+      // Realtime-yhteys voi kuolla hiljaa (kone nukkuu, verkko vaihtuu, palomuuri
+      // estää websocketit). Silloin paikallinen kopio jäätyy. Haetaan tuore data
+      // aina kun välilehti palaa näkyviin tai verkko palautuu.
+      const refreshAll = async () => {
+        const [p, d, dl] = await Promise.all([fetchAll(), fetchAllDailyStats(), fetchAllDeals()]);
+        notify(p); notifyDaily(d); notifyDeals(dl);
+      };
+      if (typeof document !== 'undefined' && document.addEventListener) {
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshAll(); });
+      }
+      if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('online', refreshAll);
+        window.addEventListener('focus', refreshAll);
+      }
       const refreshPlayers = debounced(async () => { const fresh = await fetchAll(); notify(fresh); }, REFRESH_MS);
       const refreshDaily   = debounced(async () => { const fresh = await fetchAllDailyStats(); notifyDaily(fresh); }, REFRESH_MS);
       const refreshDeals   = debounced(async () => { const fresh = await fetchAllDeals(); notifyDeals(fresh); }, REFRESH_MS);
@@ -544,6 +610,8 @@
     subscribeDaily,
     fetchAllDailyStats,
     upsertDailyStats,
+    bumpDailyStat,
+    setDailyStatsRemote,
     subscribeDeals,
     fetchAllDeals,
     upsertDeal,
