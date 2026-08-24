@@ -2777,3 +2777,30 @@ body { font-size: 14px; }
 .swb-icon { font-size: 18px; flex: none; }
 .swb-text { flex: 1; }
 .swb-x { flex: none; background: none; border: none; color: #6b4a05; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+
+/* ── Mobiilikorjaukset: viewport on nyt device-width, joten nämä säännöt ovat
+      vasta nyt käytössä. Estetään vaakavieritys ja tehdään otsikosta/välilehdistä
+      kosketusystävälliset. ───────────────────────────────────────────────────── */
+@media (max-width: 680px) {
+  html, body { max-width: 100%; overflow-x: hidden; }
+
+  /* Otsikkorivi: käyttäjälohko omalle riville, ei työnnä leveyttä yli */
+  .hdr { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
+  .hdr-user {
+    grid-column: 1; justify-self: start;
+    flex-wrap: wrap; gap: 8px; max-width: 100%;
+  }
+  .hdr-user .nick { max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Välilehdet: vaakavieritys omassa laatikossaan, ei koko sivun levittäjänä */
+  .tab-nav {
+    display: flex; flex-wrap: nowrap;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tab-nav::-webkit-scrollbar { display: none; }
+  .tab-btn { flex: 0 0 auto; }
+
+  /* Leveä sisältö (taulukot) vierii omassa laatikossaan */
+  .lb-table-wrap, .dash-table-wrap, .dr-sum-table, table { max-width: 100%; }
+}

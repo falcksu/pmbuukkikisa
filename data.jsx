@@ -596,21 +596,28 @@ function periodRange(kind, refDate, customStart, customEnd) {
 // Jaksorajattu pelaaja-aggregointi. Admin/is_admin suodatetaan pois.
 function aggregatePlayersForPeriod(playersMap, dailyStats, deals, startKey, endKey) {
   const inRange = (dk) => dk >= startKey && dk <= endKey;
+  // Summataan jaksolle osuvat rivit KERRAN pelaajittain. Aiemmin jokaiselle
+  // pelaajalle käytiin koko rivilista läpi → O(pelaajat × rivit), mikä hidastuu
+  // jatkuvasti datan kasvaessa (~4000 riviä/vuosi).
+  const dayBy = {};
+  (dailyStats || []).forEach(r => {
+    if (!inRange(r.date_key)) return;
+    const a = dayBy[r.player_id] || (dayBy[r.player_id] = { luurit: 0, vastatut: 0, buukit: 0, tapaamiset: 0 });
+    a.luurit += r.luurit || 0; a.vastatut += r.vastatut || 0; a.buukit += r.buukit || 0; a.tapaamiset += r.tapaamiset || 0;
+  });
+  const dealBy = {};
+  (deals || []).forEach(dl => {
+    if (!inRange(dl.date_key)) return;
+    const a = dealBy[dl.player_id] || (dealBy[dl.player_id] = { dealsCount: 0, megisTotal: 0, eurTotal: 0 });
+    a.dealsCount++; a.megisTotal += Number(dl.megis) || 0; a.eurTotal += Number(dl.eurot) || 0;
+  });
   const out = [];
   Object.values(playersMap || {}).forEach(p => {
     if (!p || p.key === '__admin__' || p.is_admin) return;
-    let luurit = 0, vastatut = 0, buukit = 0, tapaamiset = 0;
-    (dailyStats || []).forEach(r => {
-      if (r.player_id === p.key && inRange(r.date_key)) {
-        luurit += r.luurit || 0; vastatut += r.vastatut || 0; buukit += r.buukit || 0; tapaamiset += r.tapaamiset || 0;
-      }
-    });
-    let dealsCount = 0, megisTotal = 0, eurTotal = 0;
-    (deals || []).forEach(dl => {
-      if (dl.player_id === p.key && inRange(dl.date_key)) {
-        dealsCount++; megisTotal += Number(dl.megis) || 0; eurTotal += Number(dl.eurot) || 0;
-      }
-    });
+    const d = dayBy[p.key] || { luurit: 0, vastatut: 0, buukit: 0, tapaamiset: 0 };
+    const luurit = d.luurit, vastatut = d.vastatut, buukit = d.buukit, tapaamiset = d.tapaamiset;
+    const k = dealBy[p.key] || { dealsCount: 0, megisTotal: 0, eurTotal: 0 };
+    const dealsCount = k.dealsCount, megisTotal = k.megisTotal, eurTotal = k.eurTotal;
     out.push({
       ...p, luurit, vastatut, buukit, tapaamiset, dealsCount, megisTotal, eurTotal,
       avgMegis: dealsCount ? megisTotal / dealsCount : 0,
