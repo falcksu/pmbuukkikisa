@@ -636,7 +636,14 @@
       // Jos realtime-yhteys on kuollut hiljaa, näytöllä olevat luvut jäätyvät
       // eikä käyttäjä huomaa mitään. Haetaan tuore tila säännöllisesti, jotta
       // vanhentunut näkymä ei voi elää pitkään (ja jono purkautuu samalla).
-      setInterval(refreshAll, 5 * 60 * 1000);
+      // Vain kun välilehti on näkyvissä. Taustavälilehden tuoreuttaminen on
+      // pelkkää siirtoa turhaan — visibilitychange hakee tuoreen tilan heti kun
+      // käyttäjä palaa. Tämä puolittaa helposti liikenteen, koska sivu jää usein
+      // auki taustalle koko päiväksi.
+      setInterval(function () {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        refreshAll();
+      }, 5 * 60 * 1000);
       const refreshPlayers = debounced(async () => { const fresh = await fetchAll(); notify(fresh); }, REFRESH_MS);
       const refreshDaily   = debounced(async () => { const fresh = await fetchAllDailyStats(); notifyDaily(fresh); }, REFRESH_MS);
       const refreshDeals   = debounced(async () => { const fresh = await fetchAllDeals(); notifyDeals(fresh); }, REFRESH_MS);
