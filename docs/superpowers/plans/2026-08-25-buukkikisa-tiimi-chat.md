@@ -102,16 +102,29 @@ CREATE TRIGGER trg_chat_announce_deal
   AFTER INSERT ON deals
   FOR EACH ROW EXECUTE FUNCTION chat_announce_deal();
 
--- ── 5. Tarkistus ────────────────────────────────────────────────────────────
+-- ── 5. Realtime-julkaisu (PAKOLLINEN) ───────────────────────────────────────
+-- Supabase EI lisää uusia tauluja realtime-julkaisuun automaattisesti. Ilman
+-- tätä .channel('public:chat') ei laukea koskaan → lähetetty viesti ei ilmesty
+-- edes lähettäjälle itselleen. Sama rivi on projektin aiemmassa deals-
+-- migraatiossa (2026-06-22-...-deals-kpis.md).
+ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE chat_reactions;
+
+-- ── 6. Tarkistus ────────────────────────────────────────────────────────────
 SELECT 'chat-migraatio ok' AS status,
        (SELECT count(*) FROM pg_policies WHERE tablename IN ('chat_messages','chat_reactions')) AS politiikkoja,
-       (SELECT count(*) FROM pg_trigger WHERE tgname = 'trg_chat_announce_deal') AS laukaisimia;
+       (SELECT count(*) FROM pg_trigger WHERE tgname = 'trg_chat_announce_deal') AS laukaisimia,
+       (SELECT count(*) FROM pg_publication_tables
+         WHERE pubname = 'supabase_realtime'
+           AND tablename IN ('chat_messages','chat_reactions')) AS realtime_tauluja;
 ```
 
 - [ ] **Step 2: Aja migraatio Supabasessa**
 
 Aja `docs/migraatio-tiimichat.sql` Supabasen SQL-editorissa (Chrome auki).
-Odotettu tulos: `chat-migraatio ok`, `politiikkoja = 6`, `laukaisimia = 1`.
+Odotettu tulos: `chat-migraatio ok`, `politiikkoja = 6`, `laukaisimia = 1`,
+**`realtime_tauluja = 2`**. Jos `realtime_tauluja` on 0, `ALTER PUBLICATION` ei mennyt
+läpi — chat ei päivity lainkaan ennen kuin se on korjattu.
 
 **KRIITTINEN:** Migraatio on ajettava ENNEN kuin koodi pushataan masteriin — Vercel deployaa masterin automaattisesti ja koodi olettaa taulujen olemassaoloa.
 
@@ -141,7 +154,7 @@ git add docs/migraatio-tiimichat.sql && git commit -m "docs: tiimichatin SQL-mig
 ## Task 2: data.jsx — puhdas logiikka
 
 **Files:**
-- Modify: `data.jsx` (lisää funktiot ennen `Object.assign(window, {...})` -lohkoa, n. rivi 611)
+- Modify: `data.jsx` (lisää funktiot ennen `Object.assign(window, {` -lohkoa, n. rivi 665)
 - Test: `tests/chat-logic.test.js` (uusi)
 
 - [ ] **Step 1: Kirjoita kaatuva testi**
@@ -281,8 +294,18 @@ git add data.jsx tests/chat-logic.test.js && git commit -m "feat(chat): puhdas l
 ## Task 3: db.js — chat-API
 
 **Files:**
-- Modify: `db.js` (uusi osio `// ── Deals` -osion jälkeen, n. rivi 545; export n. rivi 771; init n. rivi 610–690)
+- Modify: `db.js` (uusi osio Deals-osion JÄLKEEN, ennen `// ── Tiimitavoitteet` -osiota
+  n. rivi 557; export `window.DB = {` -lohkoon n. rivi 741; realtime `init()`:iin n. rivi 649)
 - Test: `tests/db-chat.test.js` (uusi)
+
+**Suunnittelupäätös:** `sendChatMessage` ja `toggleReaction` saavat **pelaajan id:n
+parametrina** (`app.jsx` tietää sen jo: `currentKey`). db.js ei kysele sitä itse. Tämä
+välttää ylimääräisen edestakaisen kutsun, välimuistin vanhentumisriskin käyttäjän
+vaihtuessa, ja pitää funktiot testattavina ilman auth-tynkiä.
+
+**Validointi toistetaan db.js:ssä** (ei kutsuta data.jsx:n `validateChatMessage`-funktiota):
+`db.js` ladataan HTML:ssä ennen `data.jsx`:ää, ja testit lataavat db.js:n yksin
+sandboxiin — globaaliin riippuvuuteen nojaaminen tekisi db.js:stä yksin testaamattoman.
 
 - [ ] **Step 1: Kirjoita kaatuva testi**
 
@@ -290,14 +313,28 @@ git add data.jsx tests/chat-logic.test.js && git commit -m "feat(chat): puhdas l
 // tests/db-chat.test.js
 const { load, makeLocalStorage, assert } = require('./_harness');
 
+// Valeasiakas. HUOM: .delete().eq().eq().eq() -ketju vaatii että eq palauttaa
+// itsensä JA on thenable — muuten kolmas .eq kaatuu.
 function loadDB(handlers) {
   handlers = handlers || {};
   const calls = [];
+  const tulos = (kind) => (handlers[kind] ? handlers[kind]() : Promise.resolve({ error: null }));
+
+  function eqKetju(table) {
+    const chain = {
+      eq(col, val) { calls.push({ op: 'eq', table, col, val }); return chain; },
+      then(res, rej) { return tulos('del').then(res, rej); },
+    };
+    return chain;
+  }
+
   const win = {
     SUPABASE_CONFIG: { url: 'https://example.supabase.co', anonKey: 'anon-key' },
     supabase: { createClient() { return {
       auth: {
-        getSession: () => Promise.resolve({ data: { session: { expires_at: Math.floor(Date.now()/1000) + 3600 } } }),
+        getSession: () => Promise.resolve({
+          data: { session: { expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: 'auth-1' } } },
+        }),
         refreshSession: () => Promise.resolve({ error: null }),
       },
       realtime: { isConnected: () => true, connect() {} },
@@ -312,10 +349,8 @@ function loadDB(handlers) {
             };
             return q;
           },
-          insert(row) { calls.push({ op: 'insert', table, row }); return handlers.insert ? handlers.insert() : Promise.resolve({ error: null }); },
-          delete() { return { eq(col, val) { calls.push({ op: 'delete', table, col, val });
-            return { eq(c2, v2) { calls.push({ op: 'delete2', table, col: c2, val: v2 }); return handlers.del ? handlers.del() : Promise.resolve({ error: null }); },
-                     then(res) { return (handlers.del ? handlers.del() : Promise.resolve({ error: null })).then(res); } }; } }; },
+          insert(row) { calls.push({ op: 'insert', table, row }); return tulos('insert'); },
+          delete() { return eqKetju(table); },
         };
       },
     }; } },
@@ -323,6 +358,8 @@ function loadDB(handlers) {
   const DB = load('db.js', { window: win, localStorage: makeLocalStorage() }).window.DB;
   return { DB, calls };
 }
+
+const ME = 'testi:tampere';
 
 (async () => {
   // API on olemassa
@@ -337,27 +374,51 @@ function loadDB(handlers) {
   // Lähetys onnistuu ja käyttää insertiä
   {
     const { DB, calls } = loadDB();
-    const res = await DB.sendChatMessage('moi tiimi');
+    const res = await DB.sendChatMessage('moi tiimi', ME);
     assert(res.ok === true, 'viestin lähetys onnistuu');
     const ins = calls.find(c => c.op === 'insert' && c.table === 'chat_messages');
     assert(!!ins, 'insert kohdistui chat_messages-tauluun');
     assert(ins.row.kind === 'user', 'kind = user (deal-rivit vain laukaisimelta)');
     assert(ins.row.body === 'moi tiimi', 'viestin teksti mukana');
+    assert(ins.row.player_id === ME, 'pelaajan id tulee parametrina');
+  }
+
+  // Viestin ympärille jääneet välilyönnit siistitään
+  {
+    const { DB, calls } = loadDB();
+    await DB.sendChatMessage('  moi  ', ME);
+    assert(calls.find(c => c.op === 'insert').row.body === 'moi', 'teksti trimmataan');
   }
 
   // Tyhjä viesti ei lähde palvelimelle asti
   {
     const { DB, calls } = loadDB();
-    const res = await DB.sendChatMessage('   ');
+    const res = await DB.sendChatMessage('   ', ME);
     assert(res.ok === false, 'tyhjä viesti hylätään');
     assert(!calls.some(c => c.op === 'insert'), 'tyhjää viestiä ei lähetetä kantaan');
+  }
+
+  // Liian pitkä viesti hylätään ilman verkkokutsua
+  {
+    const { DB, calls } = loadDB();
+    const res = await DB.sendChatMessage('a'.repeat(1001), ME);
+    assert(res.ok === false, '1001 merkkiä hylätään');
+    assert(!calls.some(c => c.op === 'insert'), 'liian pitkää ei lähetetä kantaan');
+  }
+
+  // Ilman pelaajan id:tä ei yritetä kirjoittaa
+  {
+    const { DB, calls } = loadDB();
+    const res = await DB.sendChatMessage('moi', null);
+    assert(res.ok === false, 'ilman pelaaja-id:tä hylätään');
+    assert(!calls.some(c => c.op === 'insert'), 'ei turhaa insertiä');
   }
 
   // Virhe → {ok:false}, ei heitä
   {
     const { DB } = loadDB({ insert: () => Promise.resolve({ error: { message: 'permission denied' } }) });
     let threw = false, res = null;
-    try { res = await DB.sendChatMessage('moi'); } catch (e) { threw = true; }
+    try { res = await DB.sendChatMessage('moi', ME); } catch (e) { threw = true; }
     assert(threw === false, 'virhe ei heitä kutsujalle');
     assert(res.ok === false && /permission/.test(res.error.message), 'virheviesti välittyy');
   }
@@ -367,7 +428,7 @@ function loadDB(handlers) {
     const { DB } = loadDB({ insert: () => new Promise(() => {}) });
     DB.setRequestTimeout(80);
     const alku = Date.now();
-    const res = await DB.sendChatMessage('moi');
+    const res = await DB.sendChatMessage('moi', ME);
     assert(res.ok === false, 'hyytynyt lähetys → ok:false');
     assert(Date.now() - alku < 2000, 'ei jäänyt roikkumaan');
   }
@@ -375,19 +436,28 @@ function loadDB(handlers) {
   // Reaktio: ei omaa → lisätään
   {
     const { DB, calls } = loadDB();
-    const res = await DB.toggleReaction(1, '🔥', []);
+    const res = await DB.toggleReaction(1, '🔥', [], ME);
     assert(res.ok === true, 'reaktion lisäys onnistuu');
     assert(calls.some(c => c.op === 'insert' && c.table === 'chat_reactions'), 'insert chat_reactions-tauluun');
   }
 
-  // Reaktio: oma jo olemassa → poistetaan (toggle)
+  // Reaktio: oma jo olemassa → poistetaan (toggle), kolmen eq:n ketju toimii
   {
     const { DB, calls } = loadDB();
-    const omat = [{ message_id: 1, player_id: '__me__', emoji: '🔥' }];
-    const res = await DB.toggleReaction(1, '🔥', omat, '__me__');
+    const omat = [{ message_id: 1, player_id: ME, emoji: '🔥' }];
+    const res = await DB.toggleReaction(1, '🔥', omat, ME);
     assert(res.ok === true, 'reaktion poisto onnistuu');
-    assert(calls.some(c => c.op === 'delete' || c.op === 'delete2'), 'delete kutsuttiin, ei insert');
     assert(!calls.some(c => c.op === 'insert'), 'olemassa olevaa reaktiota ei lisätä uudelleen');
+    const eqt = calls.filter(c => c.op === 'eq' && c.table === 'chat_reactions');
+    assert(eqt.length === 3, 'poisto rajattiin kolmella ehdolla, sai ' + eqt.length);
+  }
+
+  // Toisen henkilön reaktio ei laukaise poistoa
+  {
+    const { DB, calls } = loadDB();
+    const toisen = [{ message_id: 1, player_id: 'joku:muu', emoji: '🔥' }];
+    await DB.toggleReaction(1, '🔥', toisen, ME);
+    assert(calls.some(c => c.op === 'insert'), 'toisen reaktio ei estä omaa lisäystä');
   }
 })();
 ```
@@ -399,12 +469,13 @@ Expected: `✗ DB.fetchAllChatMessages on olemassa`
 
 - [ ] **Step 3: Toteuta db.js:ään**
 
-Lisää `// ── Deals (kaupat)` -osion JÄLKEEN (ennen `// ── Playoff` -osiota tai `// ── Init`):
+Lisää Deals-osion JÄLKEEN, ennen `// ── Tiimitavoitteet` -osiota:
 
 ```js
   // ── Tiimichat (osaprojekti E) ─────────────────────────
   const LS_CHAT_MSG = 'buukkauskisa.chatmsg.v1';
   const LS_CHAT_RCT = 'buukkauskisa.chatrct.v1';
+  const CHAT_MAX = 1000;
   let chatListeners = [];
 
   function loadLocalChat(key) {
@@ -422,8 +493,17 @@ Lisää `// ── Deals (kaupat)` -osion JÄLKEEN (ennen `// ── Playoff` -o
     return function () { chatListeners = chatListeners.filter(function (x) { return x !== cb; }); };
   }
 
+  // Validointi toistetaan tässä tarkoituksella (ks. Task 3 -johdanto): db.js on
+  // testattava yksin, ilman data.jsx:ää.
+  function tarkistaViesti(body) {
+    const t = (body || '').trim();
+    if (!t) return { ok: false, error: { message: 'Kirjoita viesti ennen lähetystä.' } };
+    if (t.length > CHAT_MAX) return { ok: false, error: { message: 'Viesti on liian pitkä (max ' + CHAT_MAX + ' merkkiä).' } };
+    return { ok: true, body: t };
+  }
+
   // HUOM: EI fetchPaged — se hakee koko taulun ilman järjestystä/rajaa (väärä muoto).
-  // Chatista halutaan aina vain viimeisimmät ≤200 riviä.
+  // Chatista halutaan aina vain viimeisimmät enintään 200 riviä.
   async function fetchAllChatMessages() {
     if (!client) return loadLocalChat(LS_CHAT_MSG);
     try {
@@ -446,24 +526,25 @@ Lisää `// ── Deals (kaupat)` -osion JÄLKEEN (ennen `// ── Playoff` -o
     } catch (e) { console.error('fetchAllChatReactions exception:', e); return []; }
   }
 
-  async function sendChatMessage(body) {
-    const v = validateChatMessage(body);          // data.jsx (ladattu ennen db.js:ää? ks. HUOM alla)
-    if (!v.ok) return { ok: false, error: { message: v.error } };
+  // playerId tulee kutsujalta (app.jsx: currentKey) — db.js ei kysele sitä itse.
+  async function sendChatMessage(body, playerId) {
+    const v = tarkistaViesti(body);
+    if (!v.ok) return v;
+    if (!playerId) return { ok: false, error: { message: 'Kirjautunutta pelaajaa ei löytynyt.' } };
     if (!client) {
       const rows = loadLocalChat(LS_CHAT_MSG);
-      rows.unshift({ id: Date.now(), player_id: '__local__', kind: 'user', body: v.body, created_at: new Date().toISOString() });
+      rows.unshift({ id: Date.now(), player_id: playerId, kind: 'user', body: v.body, created_at: new Date().toISOString() });
       saveLocalChat(LS_CHAT_MSG, rows); notifyChat();
       return { ok: true };
     }
     const health = await ensureLiveSession();
     if (!health.ok) return { ok: false, error: health.error };
-    const pid = await currentPlayerId();
-    if (!pid) return { ok: false, error: { message: 'Kirjautunutta pelaajaa ei löytynyt.' } };
     try {
       const { error } = await withTimeout(
-        client.from('chat_messages').insert({ player_id: pid, kind: 'user', body: v.body }),
+        client.from('chat_messages').insert({ player_id: playerId, kind: 'user', body: v.body }),
         'Viestin lähetys');
       if (error) { console.error('sendChatMessage error:', error); return { ok: false, error: error }; }
+      notifyChat(); // näytä oma viesti heti, älä odota realtime-kierrosta
       return { ok: true };
     } catch (e) {
       console.error('sendChatMessage exception:', e);
@@ -480,23 +561,23 @@ Lisää `// ── Deals (kaupat)` -osion JÄLKEEN (ennen `// ── Playoff` -o
       const { error } = await withTimeout(
         client.from('chat_messages').delete().eq('id', id), 'Viestin poisto');
       if (error) return { ok: false, error: error };
+      notifyChat();
       return { ok: true };
     } catch (e) { return { ok: false, error: { message: (e && e.message) || 'Verkkovirhe' } }; }
   }
 
-  // reactions = tämänhetkinen reaktiolista (clientin tila), myPid = oma pelaaja-id.
-  // Jos oma reaktio on jo olemassa → poistetaan (toggle), muuten lisätään.
-  async function toggleReaction(messageId, emoji, reactions, myPid) {
-    const pid = myPid || await currentPlayerId();
-    if (!pid) return { ok: false, error: { message: 'Kirjautunutta pelaajaa ei löytynyt.' } };
+  // reactions = clientin nykyinen reaktiolista, playerId = oma pelaaja-id.
+  // Jos oma reaktio on jo olemassa, se poistetaan (toggle), muuten lisätään.
+  async function toggleReaction(messageId, emoji, reactions, playerId) {
+    if (!playerId) return { ok: false, error: { message: 'Kirjautunutta pelaajaa ei löytynyt.' } };
     const omaOlemassa = (reactions || []).some(function (r) {
-      return String(r.message_id) === String(messageId) && r.player_id === pid && r.emoji === emoji;
+      return String(r.message_id) === String(messageId) && r.player_id === playerId && r.emoji === emoji;
     });
     if (!client) {
       let rows = loadLocalChat(LS_CHAT_RCT);
       rows = omaOlemassa
-        ? rows.filter(function (r) { return !(String(r.message_id) === String(messageId) && r.player_id === pid && r.emoji === emoji); })
-        : rows.concat([{ message_id: messageId, player_id: pid, emoji: emoji }]);
+        ? rows.filter(function (r) { return !(String(r.message_id) === String(messageId) && r.player_id === playerId && r.emoji === emoji); })
+        : rows.concat([{ message_id: messageId, player_id: playerId, emoji: emoji }]);
       saveLocalChat(LS_CHAT_RCT, rows); notifyChat();
       return { ok: true };
     }
@@ -505,50 +586,21 @@ Lisää `// ── Deals (kaupat)` -osion JÄLKEEN (ennen `// ── Playoff` -o
     try {
       if (omaOlemassa) {
         const { error } = await withTimeout(
-          client.from('chat_reactions').delete().eq('message_id', messageId).eq('player_id', pid).eq('emoji', emoji),
+          client.from('chat_reactions').delete()
+            .eq('message_id', messageId).eq('player_id', playerId).eq('emoji', emoji),
           'Reaktion poisto');
         if (error) return { ok: false, error: error };
       } else {
         const { error } = await withTimeout(
-          client.from('chat_reactions').insert({ message_id: messageId, player_id: pid, emoji: emoji }),
+          client.from('chat_reactions').insert({ message_id: messageId, player_id: playerId, emoji: emoji }),
           'Reaktio');
         if (error) return { ok: false, error: error };
       }
+      notifyChat();
       return { ok: true };
     } catch (e) { return { ok: false, error: { message: (e && e.message) || 'Verkkovirhe' } }; }
   }
 ```
-
-**HUOM 1 — `currentPlayerId()`:** db.js ei tällä hetkellä tiedä kirjautuneen pelaajan
-id:tä. Lisää apufunktio `ensureLiveSession`-funktion viereen:
-```js
-  // Kirjautuneen käyttäjän pelaajarivin id. Välimuistitetaan — ei kysytä joka viestillä.
-  let cachedPlayerId = null;
-  async function currentPlayerId() {
-    if (cachedPlayerId) return cachedPlayerId;
-    if (!client || !client.auth) return null;
-    try {
-      const { data } = await withTimeout(client.auth.getSession(), 'Istunnon luku');
-      const uid = data && data.session && data.session.user && data.session.user.id;
-      if (!uid) return null;
-      const { data: rows } = await client.from('players').select('id').eq('auth_id', uid).maybeSingle();
-      cachedPlayerId = rows ? rows.id : null;
-      return cachedPlayerId;
-    } catch (e) { return null; }
-  }
-```
-Testissä tämä palauttaa `null` (fake-clientin `select` ei tue `.eq().maybeSingle()`) —
-siksi testin `toggleReaction`-kutsut antavat `myPid`-parametrin eksplisiittisesti, ja
-`sendChatMessage`-testi tarvitsee fake-clientiin `eq/maybeSingle`-tuen. **Lisää fake-
-clientiin** `select()`-palautukseen: `eq() { return { maybeSingle: () => Promise.resolve({ data: { id: '__me__' } }) }; }`
-
-**HUOM 2 — latausjärjestys:** `db.js` ladataan HTML:ssä ENNEN `data.jsx`:ää (rivit 26 ja 35).
-`validateChatMessage` ei siis ole määritelty db.js:n suoritushetkellä — mutta koska sitä
-kutsutaan vasta funktion sisällä ajonaikana (ei moduulitasolla), se on siihen mennessä
-saatavilla globaalina. Testissä `load('db.js')` ei lataa data.jsx:ää, joten testin
-sandboxiin on lisättävä `validateChatMessage`-tynkä TAI validointi on toistettava db.js:ssä.
-**Valitse:** toista minimivalidointi db.js:ssä (`const t=(body||'').trim(); if(!t||body.length>1000) return {...}`)
-— välttää piilotetun globaaliriippuvuuden ja pitää db.js:n itsenäisesti testattavana.
 
 Lisää exporttiin (`window.DB = {` -lohkoon, `subscribeDeals`-rivin lähelle):
 ```js
@@ -558,17 +610,23 @@ Lisää exporttiin (`window.DB = {` -lohkoon, `subscribeDeals`-rivin lähelle):
 
 - [ ] **Step 4: Kytke realtime `init()`-funktioon**
 
-`init()`:ssä `const refreshDeals = debounced(...)` -rivin JÄLKEEN:
+`const refreshDeals = debounced(...)` -rivin JÄLKEEN (n. rivi 649):
 ```js
       const refreshChat = debounced(function () { notifyChat(); }, REFRESH_MS);
 ```
-ja `.channel('public:deals')`-lohkon jälkeen:
+
+`.channel('public:deals')`-lohkon jälkeen:
 ```js
       client
         .channel('public:chat')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, refreshChat)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_reactions' }, refreshChat)
         .subscribe();
+```
+
+Lisää myös dev-local-haaran `storage`-kuuntelijaan (n. rivi 683, `else`-lohko):
+```js
+        if (e.key === LS_CHAT_MSG || e.key === LS_CHAT_RCT) notifyChat();
 ```
 
 - [ ] **Step 5: Aja testit → PASS**
@@ -583,7 +641,6 @@ for f in tests/*.test.js; do node "$f" 2>&1 | grep "✗"; done
 git add db.js tests/db-chat.test.js && git commit -m "feat(chat): db.js-API — haku, lähetys, poisto, reaktiot, realtime"
 ```
 
----
 
 ## Task 4: app.jsx — TeamChat-komponentti
 
@@ -734,9 +791,10 @@ lisää `{t.showPodium && <Podium .../>}` -rivin JÄLKEEN:
 
 `handleAddDeal`-käsittelijän viereen:
 ```js
+  // currentKey = kirjautuneen pelaajan players.id — db.js saa sen parametrina
   const handleSendChat = useCallback(async (body) => {
-    return DB.sendChatMessage(body);
-  }, []);
+    return DB.sendChatMessage(body, currentKey);
+  }, [currentKey]);
 
   const handleDeleteChat = useCallback(async (id) => {
     const res = await DB.deleteChatMessage(id);

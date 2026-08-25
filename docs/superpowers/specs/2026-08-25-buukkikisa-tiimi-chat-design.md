@@ -170,8 +170,16 @@ Uudet funktiot samaan tyyliin kuin `deals`/`daily_stats`:
 - `deleteChatMessage(id)` — vain adminille (RLS estää muut joka tapauksessa, mutta UI
   näyttää poistonapin vain adminille).
 - `toggleReaction(messageId, emoji)` — jos oma reaktio on jo olemassa: DELETE, muuten INSERT.
-- `subscribeChatMessages(cb)`, `subscribeChatReactions(cb)` — realtime-tilaukset, sama
-  `debounced`-malli kuin muilla tauluilla (yhdistää tapahtumaryöpyn yhdeksi hauksi).
+- `subscribeChat(cb)` — **yksi** realtime-tilaus kattaa sekä viestit että reaktiot (UI
+  hakee molemmat kun jompikumpi muuttuu), sama `debounced`-malli kuin muilla tauluilla.
+  *(Toteutussuunnitelmassa yhdistetty yhdeksi tilaukseksi kahden sijaan — kaksi erillistä
+  tilausta hakisi käytännössä aina molemmat listat joka tapauksessa.)*
+
+**Pelaajan id parametrina:** `sendChatMessage(body, playerId)` ja
+`toggleReaction(messageId, emoji, reactions, playerId)` saavat kirjautuneen pelaajan
+id:n kutsujalta (`app.jsx` tietää sen jo: `currentKey`). db.js ei kysele sitä itse —
+näin vältetään ylimääräinen edestakainen kutsu, välimuistin vanhentuminen käyttäjän
+vaihtuessa, ja funktiot pysyvät testattavina ilman auth-tynkiä.
 
 Kaikki kirjoitukset kulkevat `withTimeout`/`ensureLiveSession`-suojan läpi kuten muutkin
 tämän session aikana korjatut tallennukset — ei uutta epäluotettavuusluokkaa.
