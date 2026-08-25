@@ -587,6 +587,11 @@
         window.addEventListener('online', refreshAll);
         window.addEventListener('focus', refreshAll);
       }
+      // Välilehti voi olla auki päiviä ilman että se koskaan menettää fokusta.
+      // Jos realtime-yhteys on kuollut hiljaa, näytöllä olevat luvut jäätyvät
+      // eikä käyttäjä huomaa mitään. Haetaan tuore tila säännöllisesti, jotta
+      // vanhentunut näkymä ei voi elää pitkään (ja jono purkautuu samalla).
+      setInterval(refreshAll, 5 * 60 * 1000);
       const refreshPlayers = debounced(async () => { const fresh = await fetchAll(); notify(fresh); }, REFRESH_MS);
       const refreshDaily   = debounced(async () => { const fresh = await fetchAllDailyStats(); notifyDaily(fresh); }, REFRESH_MS);
       const refreshDeals   = debounced(async () => { const fresh = await fetchAllDeals(); notifyDeals(fresh); }, REFRESH_MS);
