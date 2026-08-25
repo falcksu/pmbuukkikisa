@@ -1050,7 +1050,8 @@ function PlayerModal({ player, onClose, onAction, isMe, isAdmin, onDelete, tier,
   if (!player) return null;
   const max = Math.max(...player.last5, 1);
   const peakIdx = player.last5.indexOf(max);
-  const wkDays = currentWeekDays();
+  // Otsikot samasta lähteestä kuin palkkien data — ei kisakalenterista
+  const wkDays = recentDayLabels(5);
   const days  = wkDays.map(d => d.wd);
   const dates = wkDays.map(d => d.date);
   return (

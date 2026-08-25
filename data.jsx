@@ -274,6 +274,19 @@ function recentDayKeys(n, refDate) {
   return out.reverse();
 }
 
+// Kaavion otsikot SAMASTA lähteestä kuin data (recentDayKeys). Aiemmin otsikot
+// tulivat kisakalenterista (currentWeekDays → COMPETITION.weekdays), joten
+// pelaajakortissa luki elokuussakin "MA 1.6 … PE 5.6" vaikka palkkien luvut
+// olivat oikeat. Luvut oikein, päivämäärät täysin väärin.
+const WD_LYHENTEET = ['SU', 'MA', 'TI', 'KE', 'TO', 'PE', 'LA'];
+function recentDayLabels(n, refDate) {
+  return recentDayKeys(n, refDate).map(function (key) {
+    const osat = key.split('-');
+    const d = new Date(Number(osat[0]), Number(osat[1]) - 1, Number(osat[2]), 12, 0, 0);
+    return { wd: WD_LYHENTEET[d.getDay()], date: d.getDate() + '.' + (d.getMonth() + 1), key: key };
+  });
+}
+
 // Käynnissä oleva buukkiputki: peräkkäisiä arkipäiviä joina on vähintään 1 buukki.
 // Viikonloppu ei katkaise putkea. Jos tälle päivälle ei ole vielä buukkeja, putki
 // lasketaan edellisestä arkipäivästä (muuten putki näyttäisi nollaa joka aamu).
@@ -663,6 +676,6 @@ Object.assign(window, {
   EMPTY_PLAYOFF, MATCH_ORDER,
   setMatchWinner, clearMatchWinner, startPlayoffs, resetPlayoffs, recomputeAdvancement, migratePlayoff,
   WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats, recalcPlayerFromDeals, dealLeadTimeDays, newDealId,
-  recentDayKeys, currentBuukitStreak,
+  recentDayKeys, currentBuukitStreak, recentDayLabels,
   EMPTY_PLAYOUT, startPlayout, setSakko, clearSakko, resetPlayout,
 });
