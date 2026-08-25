@@ -1762,7 +1762,7 @@ function SaveErrorBanner({ message, onDismiss }) {
       <span className="seb-icon">⚠️</span>
       <span className="seb-text">
         <strong>Kirjaus ei tallentunut.</strong> Luku palautettiin, koska sitä ei saatu talteen.
-        Tarkista verkkoyhteys ja kirjaa uudelleen. <span className="seb-detail">({message})</span>
+        Tarkista verkkoyhteys ja kirjaa uudelleen. <span className="seb-detail">({message} · v{DB.version})</span>
       </span>
       <button className="seb-reload" onClick={() => window.location.reload()}>Lataa uudelleen</button>
       <button className="seb-x" onClick={onDismiss} aria-label="Sulje">✕</button>
@@ -2911,7 +2911,7 @@ function App() {
         </div>
         )}
         <div className="footer-stripe">
-          <div>MYYNNIN DASHBOARD · {sorted.length}&nbsp;PELAAJAA · ADMIN-NÄKYMÄ</div>
+          <div>MYYNNIN DASHBOARD · {sorted.length}&nbsp;PELAAJAA · ADMIN-NÄKYMÄ · v{DB.version}</div>
           <div>POISTA PELAAJA → ROSKAKORI-IKONI &nbsp;|&nbsp; ADMIN EI NÄY TILASTOISSA</div>
         </div>
         <PlayerModal
@@ -2983,7 +2983,7 @@ function App() {
       </div>
       )}
       <div className="footer-stripe">
-        <div>MYYNNIN DASHBOARD · {sortedPublic.length}&nbsp;PELAAJAA</div>
+        <div>MYYNNIN DASHBOARD · {sortedPublic.length}&nbsp;PELAAJAA · v{DB.version}</div>
         <div>KLIKKAA RIVIÄ → PELAAJAPROFIILI &nbsp;|&nbsp; TIER, BADGET & ENNÄTYKSET</div>
       </div>
       <PlayerModal

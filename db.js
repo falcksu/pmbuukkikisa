@@ -76,6 +76,20 @@
     });
   }
 
+  // Yksi uusintayritys ohimenevälle häiriölle. Käytetään VAIN idempotenteissa
+  // operaatioissa (absoluuttinen asetus): saman arvon kirjoittaminen kahdesti on
+  // vaaratonta. Kasvatuksia (+1) EI saa uusia — jos ensimmäinen meni läpi mutta
+  // vastaus hukkui, uusinta tuplaisi kirjauksen.
+  async function withRetryIdempotent(makePromise, label) {
+    try {
+      return await withTimeout(makePromise(), label);
+    } catch (first) {
+      console.warn('Uusitaan kerran (' + label + '):', first && first.message);
+      await new Promise((r) => setTimeout(r, 1200));
+      return await withTimeout(makePromise(), label);
+    }
+  }
+
   // Hakee taulun KOKONAAN sivuttamalla. Virhetilanteessa palauttaa null (ei vajaita
   // rivejä) — kutsuja päättää turvallisen degradaation.
   async function fetchPaged(table) {
@@ -332,13 +346,16 @@
   async function setDailyStatsRemote(dateKey, stats) {
     if (!client) return upsertDailyStats('__local__', dateKey, stats);
     try {
-      const { data, error } = await withTimeout(client.rpc('set_daily_stats', {
+      const args = {
         p_date_key: dateKey,
         p_luurit: Math.max(0, stats.luurit || 0),
         p_vastatut: Math.max(0, stats.vastatut || 0),
         p_buukit: Math.max(0, stats.buukit || 0),
         p_tapaamiset: Math.max(0, stats.tapaamiset || 0),
-      }), 'Päivän tallennus');
+      };
+      // Absoluuttinen asetus → idempotentti → uusinta on turvallinen
+      const { data, error } = await withRetryIdempotent(
+        () => client.rpc('set_daily_stats', args), 'Päivän tallennus');
       if (error) { console.error('setDailyStats error:', error); return { ok: false, error }; }
       return { ok: true, row: Array.isArray(data) ? data[0] : data };
     } catch (e) {
@@ -588,6 +605,7 @@
   }
 
   window.DB = {
+    version: (window.APP_VERSION || 'tuntematon'),
     isConfigured,
     backend: client ? 'supabase' : 'local',
     hasAuth,
