@@ -1431,6 +1431,7 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
   const [selDate, setSelDate] = useState(() => localDateKey(new Date())); // pelaajan valitsema pvm
   const [form, setForm] = useState({ luurit: 0, vastatut: 0, buukit: 0, tapaamiset: 0 });
   const [saved, setSaved] = useState(false);
+  const [queued, setQueued] = useState(false);
   const [saving, setSaving] = useState(false);
   // Tiimiraportti (admin): aikajakso + laajennettava päiväerittely
   const [teamPeriod, setTeamPeriod] = useState('thisMonth');
@@ -1460,11 +1461,25 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
   });
 
   const handleSave = async () => {
+    if (saving) return;
     setSaving(true);
-    await onSaveDay(dateKey, form);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    let res;
+    try {
+      res = await onSaveDay(dateKey, form);
+    } catch (e) {
+      res = { ok: false };
+    } finally {
+      setSaving(false); // AINA — muuten nappi jää jumiin
+    }
+    // Näytä "tallennettu" VAIN jos tallennus oikeasti onnistui tai jäi jonoon.
+    // Aiemmin kuittaus näytettiin myös epäonnistuessa.
+    if (res && res.queued) {
+      setQueued(true);
+      setTimeout(() => setQueued(false), 4000);
+    } else if (!res || res.ok !== false) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    }
   };
 
   const vstPct = form.luurit > 0 ? Math.round(form.vastatut/form.luurit*100) : 0;
@@ -1586,11 +1601,11 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
             </div>
           ))}
           <button
-            className={cls('dr-save-btn', saving && 'saving', saved && 'saved-ok')}
+            className={cls('dr-save-btn', saving && 'saving', saved && 'saved-ok', queued && 'queued')}
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? 'TALLENNETAAN...' : saved ? '✓ TALLENNETTU' : 'TALLENNA PÄIVÄ'}
+            {saving ? 'TALLENNETAAN...' : queued ? '🕒 JONOSSA — LÄHTEE ITSESTÄÄN' : saved ? '✓ TALLENNETTU' : 'TALLENNA PÄIVÄ'}
           </button>
           <div className="dr-hint">Sama yhdistelmä korvaa aiemman syötön. Sarjataulukko päivittyy heti.</div>
         </div>
@@ -1776,7 +1791,7 @@ function SaveWarningBanner({ message, onDismiss }) {
   return (
     <div className="save-warn-banner" role="status">
       <span className="swb-icon">🕒</span>
-      <span className="swb-text"><strong>Kirjaus tallentui.</strong> {message}</span>
+      <span className="swb-text">{message}</span>
       <button className="swb-x" onClick={onDismiss} aria-label="Sulje">✕</button>
     </div>
   );
@@ -2702,7 +2717,7 @@ function App() {
         setDailyStats(merged);
         // Jos palvelimen päivä poikkeaa laitteen päivästä, laitteen kello on väärässä
         if (srv.date_key !== dateKey2) {
-          setSaveWarning('Laitteesi päivämäärä on ' + dateKey2 + ', palvelimen ' + srv.date_key +
+          setSaveWarning('Kirjaus tallentui. Laitteesi päivämäärä on ' + dateKey2 + ', palvelimen ' + srv.date_key +
             '. Kirjaus tallennettiin oikein palvelimen päivälle, mutta korjaa laitteen kellonaika — muuten omat raporttinäkymäsi näyttävät väärää päivää.');
         } else {
           setSaveWarning(null);
@@ -2786,8 +2801,15 @@ function App() {
     if (!currentKey || currentKey === ADMIN_KEY || isAdminRef.current) return;
     const saveRes = await DB.setDailyStatsRemote(dateKey, stats);
     if (saveRes && saveRes.ok === false) {
-      setSaveError((saveRes.error && saveRes.error.message) || 'Päivän tallennus epäonnistui.');
-      return;
+      if (saveRes.queued) {
+        // Kirjaus ei katoa: se on jonossa ja lähtee automaattisesti kun yhteys palaa
+        setSaveError(null);
+        setSaveWarning('Kirjausta ei saatu vielä lähetettyä, mutta se EI kadonnut — se on jonossa ja '
+          + 'lähetetään automaattisesti kun yhteys palaa. Voit sulkea sivun rauhassa.');
+      } else {
+        setSaveError((saveRes.error && saveRes.error.message) || 'Päivän tallennus epäonnistui.');
+      }
+      return { ok: false, queued: !!saveRes.queued };
     }
     setSaveError(null);
     const updatedDaily = [
@@ -2810,6 +2832,7 @@ function App() {
         ...items.slice(0, 24),
       ]);
     }
+    return { ok: true };
   }, [currentKey, dailyStats, playersMap]);
 
   // ── Yhteysvahti ─────────────────────────

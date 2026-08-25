@@ -2804,3 +2804,4 @@ body { font-size: 14px; }
   /* Leveä sisältö (taulukot) vierii omassa laatikossaan */
   .lb-table-wrap, .dash-table-wrap, .dr-sum-table, table { max-width: 100%; }
 }
+.dr-save-btn.queued { background: #d79a1e; color: #fff; }

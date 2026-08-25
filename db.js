@@ -340,28 +340,76 @@
     }
   }
 
-  // Päiväraportin tallennus palvelimen kautta: asettaa päivän luvut ja kirjaa
-  // muutoksen tapahtumalokiin, jolloin vahingossa tapahtunut ylikirjoitus on
-  // aina palautettavissa.
-  async function setDailyStatsRemote(dateKey, stats) {
-    if (!client) return upsertDailyStats('__local__', dateKey, stats);
+  // ── Lähtevä jono (outbox) ─────────────────────────
+  // Päiväraportin kirjaus ei saa kadota vaikka verkko pettäisi. Epäonnistunut
+  // tallennus jää selaimen jonoon ja lähtee automaattisesti uudelleen kun yhteys
+  // palaa. set_daily_stats asettaa absoluuttiset luvut → idempotentti → uudelleen-
+  // lähetys on turvallinen. Saman päivän uusi kirjaus korvaa jonossa olevan.
+  const LS_OUTBOX = 'buukkauskisa.outbox.v1';
+  let outboxListeners = [];
+  function loadOutbox() {
+    try { const r = localStorage.getItem(LS_OUTBOX); return r ? JSON.parse(r) : []; } catch (e) { return []; }
+  }
+  function storeOutbox(q) {
+    try { localStorage.setItem(LS_OUTBOX, JSON.stringify(q)); } catch (e) { /* noop */ }
+    outboxListeners.forEach(function (cb) { try { cb(q.length); } catch (e) {} });
+  }
+  function outboxCount() { return loadOutbox().length; }
+  function outboxItems() { return loadOutbox(); }
+  function subscribeOutbox(cb) {
+    outboxListeners.push(cb);
+    return function () { outboxListeners = outboxListeners.filter(function (x) { return x !== cb; }); };
+  }
+  function enqueueDaily(dateKey, stats) {
+    const q = loadOutbox().filter(function (x) { return x.dateKey !== dateKey; }); // uusin voittaa
+    q.push({ dateKey: dateKey, stats: stats, ts: Date.now() });
+    storeOutbox(q);
+  }
+
+  // Lähettää yhden päivän luvut. EI koske jonoon — kutsuja päättää.
+  async function sendDailyStats(dateKey, stats) {
+    const args = {
+      p_date_key: dateKey,
+      p_luurit: Math.max(0, stats.luurit || 0),
+      p_vastatut: Math.max(0, stats.vastatut || 0),
+      p_buukit: Math.max(0, stats.buukit || 0),
+      p_tapaamiset: Math.max(0, stats.tapaamiset || 0),
+    };
     try {
-      const args = {
-        p_date_key: dateKey,
-        p_luurit: Math.max(0, stats.luurit || 0),
-        p_vastatut: Math.max(0, stats.vastatut || 0),
-        p_buukit: Math.max(0, stats.buukit || 0),
-        p_tapaamiset: Math.max(0, stats.tapaamiset || 0),
-      };
-      // Absoluuttinen asetus → idempotentti → uusinta on turvallinen
       const { data, error } = await withRetryIdempotent(
-        () => client.rpc('set_daily_stats', args), 'Päivän tallennus');
-      if (error) { console.error('setDailyStats error:', error); return { ok: false, error }; }
+        function () { return client.rpc('set_daily_stats', args); }, 'Päivän tallennus');
+      if (error) { console.error('setDailyStats error:', error); return { ok: false, error: error }; }
       return { ok: true, row: Array.isArray(data) ? data[0] : data };
     } catch (e) {
       console.error('setDailyStats exception:', e);
       return { ok: false, error: { message: (e && e.message) || 'Verkkovirhe tallennuksessa' } };
     }
+  }
+
+  // Purkaa jonon. Ajetaan latauksessa, kun välilehti palaa näkyviin ja kun verkko palaa.
+  async function flushOutbox() {
+    if (!client) return { sent: 0, left: 0 };
+    const q = loadOutbox();
+    if (!q.length) return { sent: 0, left: 0 };
+    let sent = 0;
+    const left = [];
+    for (const item of q) {
+      const res = await sendDailyStats(item.dateKey, item.stats);
+      if (res && res.ok) sent++; else left.push(item);
+    }
+    storeOutbox(left);
+    return { sent: sent, left: left.length };
+  }
+
+  // Päiväraportin tallennus. Epäonnistuessa kirjaus EI katoa vaan jää jonoon.
+  async function setDailyStatsRemote(dateKey, stats) {
+    if (!client) return upsertDailyStats('__local__', dateKey, stats);
+    const res = await sendDailyStats(dateKey, stats);
+    if (!res.ok) {
+      enqueueDaily(dateKey, stats);
+      return { ok: false, error: res.error, queued: true };
+    }
+    return res;
   }
 
   async function upsertDailyStats(playerId, dateKey, stats) {
@@ -516,6 +564,7 @@
       // estää websocketit). Silloin paikallinen kopio jäätyy. Haetaan tuore data
       // aina kun välilehti palaa näkyviin tai verkko palautuu.
       const refreshAll = async () => {
+        await flushOutbox(); // lähetä ensin jonossa odottavat kirjaukset
         const [p, d, dl] = await Promise.all([fetchAll(), fetchAllDailyStats(), fetchAllDeals()]);
         notify(p); notifyDaily(d); notifyDeals(dl);
       };
@@ -630,6 +679,10 @@
     upsertDailyStats,
     bumpDailyStat,
     setDailyStatsRemote,
+    flushOutbox,
+    outboxCount,
+    outboxItems,
+    subscribeOutbox,
     subscribeDeals,
     fetchAllDeals,
     upsertDeal,
