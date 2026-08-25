@@ -15,6 +15,18 @@
     try {
       client = window.supabase.createClient(cfg.url, cfg.anonKey, {
         realtime: { params: { eventsPerSecond: 5 } },
+        auth: {
+          // supabase-js v2 sarjallistaa token-päivityksen selaimen Web Locks
+          // -lukolla (navigatorLock). Jos lukko jää toiselle välilehdelle jumiin
+          // — esim. taustoitettu tai kaatunut välilehti — TÄMÄN välilehden kaikki
+          // REST/RPC-kutsut jäävät odottamaan lukkoa eivätkä lähde koskaan.
+          // Oire: 15 s aikakatkaisu, NOLLA pyyntöä palvelimella, mutta istunto
+          // päivittyy normaalisti siinä toisessa välilehdessä. Osuu juuri niihin,
+          // joilla sivu on auki koko päivän / useammalla laitteella.
+          // Läpimenevä lukko poistaa jumin. Haittapuoli on korkeintaan se, että
+          // kaksi välilehteä voi päivittää tokenin päällekkäin — vaaratonta.
+          lock: function (_name, _acquireTimeout, fn) { return fn(); },
+        },
       });
     } catch (e) {
       console.warn('Supabase client init failed', e);
@@ -67,7 +79,7 @@
   function withTimeout(promise, label) {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        reject(new Error((label || 'Pyyntö') + ' aikakatkaistiin — tarkista verkkoyhteys ja yritä uudelleen.'));
+        reject(new Error((label || 'Pyyntö') + ' aikakatkaistiin. Sulje sivuston muut välilehdet, lataa sivu uudelleen ja yritä uudestaan.'));
       }, requestTimeoutMs);
       Promise.resolve(promise).then(
         (v) => { clearTimeout(timer); resolve(v); },
