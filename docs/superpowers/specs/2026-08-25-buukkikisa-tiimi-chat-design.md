@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   player_id  text        NOT NULL REFERENCES players(id),
   kind       text        NOT NULL DEFAULT 'user' CHECK (kind IN ('user','deal')),
   body       text,                          -- ihmisviestin teksti; NULL kind='deal'-riveillä
-  deal_id    text        REFERENCES deals(id),  -- vain kind='deal'
+  deal_id    text        REFERENCES deals(id) ON DELETE CASCADE,  -- vain kind='deal'
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT chat_body_or_deal CHECK (
     (kind = 'user' AND body IS NOT NULL AND length(trim(body)) > 0 AND length(body) <= 1000)
@@ -96,6 +96,13 @@ CREATE TRIGGER trg_chat_announce_deal
   FOR EACH ROW EXECUTE FUNCTION chat_announce_deal();
 ```
 
+**Kaupan poisto:** `deal_id`-viittaus on `ON DELETE CASCADE` (kohta 2.1) — kun kauppa
+poistetaan (olemassa oleva ominaisuus, `DB.deleteDeal` / `handleDeleteDeal`), sen
+chat-ilmoitus poistuu automaattisesti mukana. **Tämä on välttämätön**, ei vain siisteyttä:
+ilman `CASCADE`a (oletus `NO ACTION`) jokainen kaupan poisto epäonnistuisi vierasavain-
+rikkomukseen heti kun laukaisin on käytössä, koska joka ikiselle kaupalle syntyy chat-rivi.
+Tarkistettu ettei olemassa olevaa poisto-koodipolkua tarvitse muuttaa muilta osin.
+
 **Miksi laukaisin eikä client-koodi:** koko tämän session korjaussarjan opetus on ollut,
 ettei clientin varaan voi jättää mitään mikä on pakko tapahtua — selain voi kaatua,
 verkko katketa, välilehti jäätyä. Laukaisin takaa että kauppailmoitus syntyy **aina** kun
@@ -108,9 +115,12 @@ yhdistetään **client-puolella jo ladatusta tilasta**: sovellus pitää muutenk
 koko `deals`-taulun ja `playersMap`:in (realtime-tilauksilla synkassa), ja täsmälleen
 sama yhdistämismalli on jo käytössä `buildTickerFeed`:ssä (data.jsx) — `deals.find(d =>
 d.id === msg.deal_id)` ja `playersMap[msg.player_id].nick`. Tämä toimii identtisesti
-sekä alkuhaussa (`fetchAllChatMessages`) että realtime-tilauksen kautta saapuville
-riveille (Postgres-muutostapahtuma kantaa vain raa'an uuden rivin, ei JOINia — mutta
-koska `deals`/`players` ovat jo clientin muistissa, erillistä palvelinkutsua ei tarvita).
+sekä alkuhaussa (`fetchAllChatMessages`) että realtime-päivityksen jälkeen. Realtime
+toimii samalla debounce+kokohaku-mallilla kuin `subscribeDeals`/`subscribeDaily` jo nyt
+(db.js): tapahtuma ei tuo yksittäistä riviä clientille, vaan laukaisee koko
+`chat_messages`-taulun uudelleenhaun (`fetchAllChatMessages`) 400 ms debouncen jälkeen,
+ja tulos korvaa koko listan — täysin sama malli kuin muillakin tauluilla, ei uutta
+per-rivi-käsittelijää tarvita.
 Jos `deal_id` ei löydy vielä ladatusta `deals`-listasta (esim. realtime-viesti ehtii
 ennen deals-tilauksen päivitystä), rivi renderöidään tilapäisesti pelkällä nimimerkillä
 ("🎉 RÄNTILÄ teki kaupan") ja täydentyy kun deals-data saapuu.
@@ -222,5 +232,9 @@ Kohdat 2.1–2.3 ja 3 kootaan yhdeksi SQL-tiedostoksi
 `docs/migraatio-atominen-kirjaus.sql`) joka ajetaan Supabasen SQL-editorissa ennen
 masterin pushaamista — koodi olettaa taulujen olemassaoloa heti deployn jälkeen.
 
-Ei vaikuta olemassa olevaan dataan (`deals`, `daily_stats`, `players` pysyvät
-koskemattomina — ainoa muutos niihin on uusi AFTER INSERT -laukaisin `deals`-taulussa).
+Ei vaikuta olemassa oleviin **riveihin** (`deals`, `daily_stats`, `players` -sisältö
+pysyy koskemattomana). Käyttäytymiseen tulee kuitenkin yksi tarkoituksellinen muutos:
+`deals`-tauluun lisätään AFTER INSERT -laukaisin (kohta 2.3), ja kaupan poisto
+(`DB.deleteDeal`, olemassa oleva ominaisuus) poistaa jatkossa myös sen chat-ilmoituksen
+`ON DELETE CASCADE`:n kautta (kohta 2.1). Tämä on tietoinen, tarpeellinen sivuvaikutus —
+ilman `CASCADE`a kaupan poisto alkaisi epäonnistua heti kun laukaisin on käytössä.
