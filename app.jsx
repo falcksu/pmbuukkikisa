@@ -1797,6 +1797,54 @@ function SaveWarningBanner({ message, onDismiss }) {
   );
 }
 
+// Näytetään kun käyttäjä saapuu salasanan palautuslinkistä. Ilman tätä linkki
+// vei kirjautumissivulle eikä "avannut mitään".
+function SetPasswordScreen({ onDone }) {
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [ok, setOk] = useState(false);
+
+  const submit = async () => {
+    if (busy) return;
+    if (pw1.length < 8) { setErr('Salasanan on oltava vähintään 8 merkkiä.'); return; }
+    if (pw1 !== pw2) { setErr('Salasanat eivät täsmää.'); return; }
+    setBusy(true); setErr(null);
+    let res;
+    try { res = await DB.updateOwnPassword(pw1); }
+    catch (e) { res = { ok: false, error: { message: (e && e.message) || 'Virhe' } }; }
+    finally { setBusy(false); }
+    if (res && res.ok) { setOk(true); setTimeout(() => onDone(), 1500); }
+    else setErr((res && res.error && res.error.message) || 'Salasanan vaihto epäonnistui.');
+  };
+
+  return (
+    <div className="conn-error-wrap">
+      <div className="conn-error setpw">
+        <div className="conn-error-badge">SALASANAN VAIHTO</div>
+        <h1 className="conn-error-title">Aseta uusi salasana</h1>
+        {ok ? (
+          <p className="conn-error-lead">✓ Salasana vaihdettu. Siirrytään sisään…</p>
+        ) : (
+          <>
+            <p className="conn-error-lead">Valitse uusi salasana tilillesi. Vähintään 8 merkkiä.</p>
+            <input className="deal-input setpw-input" type="password" placeholder="Uusi salasana"
+                   value={pw1} onChange={e => setPw1(e.target.value)} autoFocus />
+            <input className="deal-input setpw-input" type="password" placeholder="Uusi salasana uudelleen"
+                   value={pw2} onChange={e => setPw2(e.target.value)}
+                   onKeyDown={e => { if (e.key === 'Enter') submit(); }} />
+            {err && <div className="deal-error" role="alert">⚠️ {err}</div>}
+            <button className="conn-error-btn" disabled={busy} onClick={submit}>
+              {busy ? 'Tallennetaan…' : 'Tallenna salasana'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ConnectionErrorScreen() {
   return (
     <div className="conn-error-wrap">
@@ -2214,6 +2262,7 @@ function App() {
   const [dealModalOpen, setDealModalOpen] = useState(false); // etusivun kauppamodaali
   const [saveError, setSaveError] = useState(null); // näkyvä virhe kun kirjaus ei tallennu
   const [saveWarning, setSaveWarning] = useState(null); // näkyvä varoitus (kirjaus tallentui, mutta jokin vaatii huomiota)
+  const [recoveryMode, setRecoveryMode] = useState(false); // saavuttiin salasanan palautuslinkistä
 
   // DB init + realtime subscribe
   const playersMapRef = useRef({});
@@ -2256,7 +2305,8 @@ function App() {
       setSession(s);
       if (s) { const p = await DB.fetchMyPlayer(s.user.id); setLinkedPlayer(p); }
       setAuthReady(true);
-      unsub = DB.onAuthChange(async (ns) => {
+      unsub = DB.onAuthChange(async (ns, event) => {
+        if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
         setSession(ns);
         if (ns) { const p = await DB.fetchMyPlayer(ns.user.id); setLinkedPlayer(p); }
         else { setLinkedPlayer(null); }
@@ -2834,6 +2884,11 @@ function App() {
     }
     return { ok: true };
   }, [currentKey, dailyStats, playersMap]);
+
+  // Salasanan palautuslinkistä saapunut → näytä uuden salasanan lomake
+  if (recoveryMode) {
+    return <SetPasswordScreen onDone={() => setRecoveryMode(false)} />;
+  }
 
   // ── Yhteysvahti ─────────────────────────
   // Konfiguroitu Supabaseen mutta yhteyttä ei ole → estä kirjaaminen kokonaan.

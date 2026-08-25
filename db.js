@@ -633,8 +633,24 @@
     return data ? data.session : null;
   }
   function onAuthChange(cb) {
-    const { data } = client.auth.onAuthStateChange((_e, s) => cb(s));
+    // Tapahtuma välitetään kutsujalle: mm. 'PASSWORD_RECOVERY' kertoo että
+    // käyttäjä saapui salasanan palautuslinkistä ja hänelle pitää näyttää
+    // uuden salasanan asetuslomake.
+    const { data } = client.auth.onAuthStateChange((event, s) => cb(s, event));
     return () => { try { data.subscription.unsubscribe(); } catch (e) {} };
+  }
+
+  // Käyttäjä asettaa OMAN salasanansa (palautuslinkin jälkeen tai profiilista).
+  async function updateOwnPassword(newPassword) {
+    if (!client) return { ok: false, error: { message: 'Ei yhteyttä' } };
+    try {
+      const { error } = await withTimeout(
+        client.auth.updateUser({ password: newPassword }), 'Salasanan vaihto');
+      if (error) return { ok: false, error: error };
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: { message: (e && e.message) || 'Verkkovirhe' } };
+    }
   }
   async function registerPlayer(nick, city, code) {
     return client.rpc('register_player', { p_nick: nick, p_city: city, p_code: code });
@@ -661,7 +677,7 @@
     offlineMisconfig,
     fetchHealth,
     setRequestTimeout,
-    signUp, signIn, signOut, getSession, onAuthChange,
+    signUp, signIn, signOut, getSession, onAuthChange, updateOwnPassword,
     registerPlayer, linkExistingPlayer, fetchUnlinkedPlayers, fetchMyPlayer,
     init,
     subscribe,

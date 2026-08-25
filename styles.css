@@ -2805,3 +2805,5 @@ body { font-size: 14px; }
   .lb-table-wrap, .dash-table-wrap, .dr-sum-table, table { max-width: 100%; }
 }
 .dr-save-btn.queued { background: #d79a1e; color: #fff; }
+.conn-error.setpw { max-width: 420px; }
+.setpw-input { width: 100%; margin-bottom: 10px; padding: 11px 12px; font-size: 15px; }
