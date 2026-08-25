@@ -117,7 +117,10 @@ ALTER TABLE chat_reactions ENABLE ROW LEVEL SECURITY;
 -- chat_messages
 CREATE POLICY cm_select ON chat_messages FOR SELECT USING (has_linked_player());
 CREATE POLICY cm_insert ON chat_messages FOR INSERT
-  WITH CHECK (kind = 'user' AND owns_player(player_id));  -- 'deal'-rivit vain laukaisimelta (SECURITY DEFINER ohittaa RLS:n)
+  WITH CHECK (kind = 'user' AND owns_player(player_id));  -- 'deal'-rivit vain laukaisimelta
+  -- (chat_announce_deal on SECURITY DEFINER: ajaa funktion OMISTAJAN — migraatiota ajavan
+  -- roolin — oikeuksin, ei sen käyttäjän joka lisäsi kaupan; RLS:n INSERT-tarkistus koskee
+  -- vain käyttäjän omilla oikeuksillaan tekemiä suoria INSERTejä, ei tätä.)
 CREATE POLICY cm_delete ON chat_messages FOR DELETE USING (is_admin());
 -- Ei UPDATE-politiikkaa: viestit ovat muuttumattomia (ei muokkausta).
 
@@ -136,9 +139,12 @@ Hyödyntää olemassa olevia `has_linked_player()`, `owns_player()`, `is_admin()
 
 Uudet funktiot samaan tyyliin kuin `deals`/`daily_stats`:
 
-- `fetchAllChatMessages()` — sivutettu haku (`fetchPaged`, sama 1000-rivin suoja kuin
-  muualla), palauttaa viimeisimmät ~200 riviä (ORDER BY created_at DESC LIMIT, ei koko
-  historiaa — pieni tiimi, mutta ei syytä ladata tuhansia rivejä joka latauksella).
+- `fetchAllChatMessages()` — **EI** käytä `fetchPaged`-apufunktiota (se hakee koko taulun
+  ilman järjestystä/rajaa, väärä muoto tähän). Oma kysely:
+  `client.from('chat_messages').select('*').order('created_at', {ascending:false}).limit(200)`.
+  Palauttaa siis aina viimeisimmät ≤200 riviä, ei koko historiaa. Vanhempaa historiaa ei
+  voi selata v1:ssä (ei infinite scrollia) — jos tämä osoittautuu tarpeelliseksi, lisätään
+  myöhemmin omana pyyntönä.
 - `sendChatMessage(body)` — `ensureLiveSession()` ensin (sama yhteysvarmistus kuin
   kirjauksissa), sitten INSERT. Palauttaa `{ok, error}`.
 - `deleteChatMessage(id)` — vain adminille (RLS estää muut joka tapauksessa, mutta UI
