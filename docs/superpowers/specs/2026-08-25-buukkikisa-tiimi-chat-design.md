@@ -1,0 +1,210 @@
+# Sales Dashboard 2.0 · Osaprojekti E: Tiimichat + kauppailmoitukset + reaktiot
+
+**Päivämäärä:** 2026-08-25
+**Tila:** Suunnittelu hyväksytty, valmis spec-reviewiin
+**Osaprojekti:** E (uusi, A–D:n jälkeen). Kattaa VAIN tiimichatin — ei YouTube-voittolaulua (erillinen, myöhempi osaprojekti).
+
+---
+
+## 1. Tausta ja tavoite
+
+Etusivun sivupalkissa (Top3/H2H-korttien alla) on käyttämätöntä tilaa. Kaupat näkyvät jo
+ylälaidan vierivässä tikkerissä (`buildTickerFeed`), mutta se on lyhytikäinen eikä
+pysyvä — eikä siihen voi reagoida tai kommentoida.
+
+### Tavoite (success criteria)
+- Tiimi voi kirjoittaa vapaita viestejä toisilleen samassa näkymässä missä tilastot ovat.
+- Kaupat näkyvät chatissa automaattisena, juhlallisena ilmoituksena — **taattuna**, ei
+  riippuvaisena siitä että kirjaajan selain ehtii lähettää mitään erikseen.
+- Viesteihin (myös kauppailmoituksiin) voi reagoida nopealla emoji-napilla.
+- Uudet viestit ja reaktiot näkyvät kaikille avoinna oleville näkymille reaaliajassa.
+- Admin voi poistaa asiattoman viestin.
+
+### Päätetyt valinnat (brainstorm 2026-08-25)
+- Chat on **oikea vapaa chat** (ei pelkkä automaattinen tapahtumaloki).
+- Automaattisista tapahtumista chatissa näkyvät **vain kaupat**, ei buukkeja (liikaa volyymia).
+- Reaaliaikainen (Supabase Realtime, sama malli kuin muualla sovelluksessa).
+- Admin voi poistaa minkä tahansa viestin. Ei viestin muokkausta kenellekään.
+- Reaktiot: **kiinteä 5 emojin joukko** — 👍 🔥 🎉 💰 😂 — ei vapaata emoji-valitsinta.
+- Yksi henkilö saa antaa useita eri emoji-reaktioita samaan viestiin, mutta vain yhden
+  kutakin emojia (klikkaus uudelleen poistaa oman reaktion — toggle).
+- **GIF:t rajattu pois tästä osaprojektista** (skipattu brainstormissa, voidaan lisätä
+  myöhemmin omana osaprojektinaan).
+- Ei emoji-valitsinta viestin kirjoitukseen — selaimen/käyttöjärjestelmän oma emoji-
+  näppäimistö riittää (Win+. / Cmd+Ctrl+Space / mobiilin oma näppäimistö).
+
+---
+
+## 2. Datamalli
+
+### 2.1 `chat_messages` — uusi taulu
+
+```sql
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id         bigserial PRIMARY KEY,
+  player_id  text        NOT NULL REFERENCES players(id),
+  kind       text        NOT NULL DEFAULT 'user' CHECK (kind IN ('user','deal')),
+  body       text,                          -- ihmisviestin teksti; NULL kind='deal'-riveillä
+  deal_id    text        REFERENCES deals(id),  -- vain kind='deal'
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT chat_body_or_deal CHECK (
+    (kind = 'user' AND body IS NOT NULL AND length(trim(body)) > 0 AND length(body) <= 1000)
+    OR
+    (kind = 'deal' AND deal_id IS NOT NULL)
+  )
+);
+CREATE INDEX IF NOT EXISTS chat_messages_created ON chat_messages (created_at DESC);
+```
+
+- `body`-pituus rajattu 1000 merkkiin sovellus- JA kantatasolla (CHECK).
+- `kind='deal'`-rivit luodaan **vain** palvelinpuolen laukaisimella (ks. 2.3) — client ei
+  saa koskaan insertoida `kind='deal'`-riviä itse (estetään RLS:n WITH CHECK -lausekkeella).
+
+### 2.2 `chat_reactions` — uusi taulu
+
+```sql
+CREATE TABLE IF NOT EXISTS chat_reactions (
+  id         bigserial PRIMARY KEY,
+  message_id bigint      NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  player_id  text        NOT NULL REFERENCES players(id),
+  emoji      text        NOT NULL CHECK (emoji IN ('👍','🔥','🎉','💰','😂')),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (message_id, player_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS chat_reactions_message ON chat_reactions (message_id);
+```
+
+- `UNIQUE (message_id, player_id, emoji)` estää saman reaktion kaksinkertaisen lisäyksen;
+  poisto = oman rivin DELETE (toggle-käytös clientissä: jos oma reaktio on jo olemassa,
+  klikkaus poistaa sen sen sijaan että lisäisi toisen).
+- `ON DELETE CASCADE` viestin poistuessa (admin-poisto) reaktiot poistuvat automaattisesti.
+
+### 2.3 Laukaisin: kauppa → chat-ilmoitus (palvelinpuolella, ei clientin varassa)
+
+```sql
+CREATE OR REPLACE FUNCTION chat_announce_deal() RETURNS trigger
+  LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  INSERT INTO chat_messages (player_id, kind, deal_id)
+  VALUES (NEW.player_id, 'deal', NEW.id);
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS trg_chat_announce_deal ON deals;
+CREATE TRIGGER trg_chat_announce_deal
+  AFTER INSERT ON deals
+  FOR EACH ROW EXECUTE FUNCTION chat_announce_deal();
+```
+
+**Miksi laukaisin eikä client-koodi:** koko tämän session korjaussarjan opetus on ollut,
+ettei clientin varaan voi jättää mitään mikä on pakko tapahtua — selain voi kaatua,
+verkko katketa, välilehti jäätyä. Laukaisin takaa että kauppailmoitus syntyy **aina** kun
+kauppa tallentuu, riippumatta siitä mitä selaimessa tapahtuu sen jälkeen. Sama periaate
+kuin `stat_events`-lokissa.
+
+Deal-rivin **sisältö** (Megis, toimiala, nimimerkki) haetaan render-hetkellä JOIN:lla
+`deals`+`players`-tauluihin `deal_id`:n kautta — ei denormalisoida chat-riville, jottei
+data voi mennä eri mieltä alkuperäisen kauppa-rivin kanssa.
+
+---
+
+## 3. Oikeudet (RLS)
+
+```sql
+ALTER TABLE chat_messages  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_reactions ENABLE ROW LEVEL SECURITY;
+
+-- chat_messages
+CREATE POLICY cm_select ON chat_messages FOR SELECT USING (has_linked_player());
+CREATE POLICY cm_insert ON chat_messages FOR INSERT
+  WITH CHECK (kind = 'user' AND owns_player(player_id));  -- 'deal'-rivit vain laukaisimelta (SECURITY DEFINER ohittaa RLS:n)
+CREATE POLICY cm_delete ON chat_messages FOR DELETE USING (is_admin());
+-- Ei UPDATE-politiikkaa: viestit ovat muuttumattomia (ei muokkausta).
+
+-- chat_reactions
+CREATE POLICY cr_select ON chat_reactions FOR SELECT USING (has_linked_player());
+CREATE POLICY cr_insert ON chat_reactions FOR INSERT WITH CHECK (owns_player(player_id));
+CREATE POLICY cr_delete ON chat_reactions FOR DELETE USING (owns_player(player_id));
+```
+
+Hyödyntää olemassa olevia `has_linked_player()`, `owns_player()`, `is_admin()` -funktioita
+(osaprojekti B:stä) — ei uusia turvafunktioita tarvita.
+
+---
+
+## 4. Client (db.js)
+
+Uudet funktiot samaan tyyliin kuin `deals`/`daily_stats`:
+
+- `fetchAllChatMessages()` — sivutettu haku (`fetchPaged`, sama 1000-rivin suoja kuin
+  muualla), palauttaa viimeisimmät ~200 riviä (ORDER BY created_at DESC LIMIT, ei koko
+  historiaa — pieni tiimi, mutta ei syytä ladata tuhansia rivejä joka latauksella).
+- `sendChatMessage(body)` — `ensureLiveSession()` ensin (sama yhteysvarmistus kuin
+  kirjauksissa), sitten INSERT. Palauttaa `{ok, error}`.
+- `deleteChatMessage(id)` — vain adminille (RLS estää muut joka tapauksessa, mutta UI
+  näyttää poistonapin vain adminille).
+- `toggleReaction(messageId, emoji)` — jos oma reaktio on jo olemassa: DELETE, muuten INSERT.
+- `subscribeChatMessages(cb)`, `subscribeChatReactions(cb)` — realtime-tilaukset, sama
+  `debounced`-malli kuin muilla tauluilla (yhdistää tapahtumaryöpyn yhdeksi hauksi).
+
+Kaikki kirjoitukset kulkevat `withTimeout`/`ensureLiveSession`-suojan läpi kuten muutkin
+tämän session aikana korjatut tallennukset — ei uutta epäluotettavuusluokkaa.
+
+---
+
+## 5. UI (app.jsx)
+
+Uusi `TeamChat`-komponentti sivupalkkiin (Top3/H2H-korttien alle), sekä admin- että
+pelaajanäkymään:
+
+- Kiinteä korkeus (~400px) sisäisellä vierityksellä, uusin viesti alimpana, autoscroll
+  uuden viestin saapuessa (paitsi jos käyttäjä on itse vierittänyt ylös lukemaan
+  historiaa — silloin ei pakoteta alas).
+- Kauppailmoitus-rivi korostettuna (esim. `chat-deal`-luokka, 🎉-ikoni):
+  *"🎉 RÄNTILÄ · KAUPPA 250 Megis · Teollisuus"*
+- Ihmisviesti: nimimerkki + kellonaika + teksti.
+- Jokaisen viestin alla 5 emoji-nappia (👍🔥🎉💰😂) + määrä jos ≥1 reaktio; oma reaktio
+  korostettu (esim. taustaväri). Klikkaus kutsuu `toggleReaction`.
+- Admin näkee pienen ✕-poistonapin viestin vieressä.
+- Tekstikenttä + lähetä-nappi pohjassa; Enter lähettää, Shift+Enter rivinvaihto.
+- Lähetysnappi disabloituu tyhjällä/pelkkää whitespacea sisältävällä viestillä.
+
+Mobiilissa `TeamChat` asettuu sivupalkin muiden korttien tapaan sisällön alle
+(olemassa oleva responsiivisuus, ei erillistä mobiilityötä).
+
+---
+
+## 6. Rajattu pois (YAGNI)
+
+- GIF:t (oma myöhempi osaprojekti).
+- Vapaa emoji-valitsin reaktioihin (kiinteä 5 kpl riittää).
+- Viestin muokkaus.
+- Lukukuittaukset / "joku kirjoittaa…" -indikaattori.
+- Maininnat (@nimimerkki) ja ilmoitukset.
+- Viestien haku/suodatus.
+- Kuvien/linkkien upotus (koska GIF:t rajattu pois, viesti renderöidään aina pelkkänä
+  tekstinä — ei tarvita XSS-suojausta linkin esikatselulle).
+
+---
+
+## 7. Testaus
+
+Sama malli kuin projektin muu koodi: riippumattomat Node-testit (`tests/_harness.js`,
+vm-sandbox), ei erillistä testikehystä. Uudet tiedostot:
+- `tests/chat-logic.test.js` — viestin validointi (tyhjä/liian pitkä hylätään), reaktion
+  toggle-logiikka, kauppailmoituksen renderöintimuoto.
+- `tests/db-chat.test.js` — samaan tyyliin kuin `tests/db-deals.test.js`: valeasiakas,
+  `sendChatMessage`/`toggleReaction` palauttavat `{ok,error}` oikein, eivät heitä eivätkä
+  jää roikkumaan (sama aikakatkaisu-/uusintasuoja kuin muualla).
+
+---
+
+## 8. Migraatio (Supabase-SQL ajettavaksi tuotantoon)
+
+Kohdat 2.1–2.3 ja 3 kootaan yhdeksi SQL-tiedostoksi
+(`docs/migraatio-tiimichat.sql`, samaan tyyliin kuin
+`docs/migraatio-atominen-kirjaus.sql`) joka ajetaan Supabasen SQL-editorissa ennen
+masterin pushaamista — koodi olettaa taulujen olemassaoloa heti deployn jälkeen.
+
+Ei vaikuta olemassa olevaan dataan (`deals`, `daily_stats`, `players` pysyvät
+koskemattomina — ainoa muutos niihin on uusi AFTER INSERT -laukaisin `deals`-taulussa).
