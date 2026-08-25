@@ -102,9 +102,18 @@ verkko katketa, välilehti jäätyä. Laukaisin takaa että kauppailmoitus synty
 kauppa tallentuu, riippumatta siitä mitä selaimessa tapahtuu sen jälkeen. Sama periaate
 kuin `stat_events`-lokissa.
 
-Deal-rivin **sisältö** (Megis, toimiala, nimimerkki) haetaan render-hetkellä JOIN:lla
-`deals`+`players`-tauluihin `deal_id`:n kautta — ei denormalisoida chat-riville, jottei
-data voi mennä eri mieltä alkuperäisen kauppa-rivin kanssa.
+Deal-rivin **sisältö** (Megis, toimiala, nimimerkki) ei denormalisoidu chat-riville —
+`chat_messages.kind='deal'`-rivi kantaa vain `player_id`+`deal_id`+`created_at`. Sisältö
+yhdistetään **client-puolella jo ladatusta tilasta**: sovellus pitää muutenkin muistissa
+koko `deals`-taulun ja `playersMap`:in (realtime-tilauksilla synkassa), ja täsmälleen
+sama yhdistämismalli on jo käytössä `buildTickerFeed`:ssä (data.jsx) — `deals.find(d =>
+d.id === msg.deal_id)` ja `playersMap[msg.player_id].nick`. Tämä toimii identtisesti
+sekä alkuhaussa (`fetchAllChatMessages`) että realtime-tilauksen kautta saapuville
+riveille (Postgres-muutostapahtuma kantaa vain raa'an uuden rivin, ei JOINia — mutta
+koska `deals`/`players` ovat jo clientin muistissa, erillistä palvelinkutsua ei tarvita).
+Jos `deal_id` ei löydy vielä ladatusta `deals`-listasta (esim. realtime-viesti ehtii
+ennen deals-tilauksen päivitystä), rivi renderöidään tilapäisesti pelkällä nimimerkillä
+("🎉 RÄNTILÄ teki kaupan") ja täydentyy kun deals-data saapuu.
 
 ---
 
@@ -144,7 +153,8 @@ Uudet funktiot samaan tyyliin kuin `deals`/`daily_stats`:
   `client.from('chat_messages').select('*').order('created_at', {ascending:false}).limit(200)`.
   Palauttaa siis aina viimeisimmät ≤200 riviä, ei koko historiaa. Vanhempaa historiaa ei
   voi selata v1:ssä (ei infinite scrollia) — jos tämä osoittautuu tarpeelliseksi, lisätään
-  myöhemmin omana pyyntönä.
+  myöhemmin omana pyyntönä. **Huom:** rivit tulevat uusin-ensin; UI (kohta 5) kääntää
+  järjestyksen näyttääkseen vanhin ylhäällä / uusin alhaalla.
 - `sendChatMessage(body)` — `ensureLiveSession()` ensin (sama yhteysvarmistus kuin
   kirjauksissa), sitten INSERT. Palauttaa `{ok, error}`.
 - `deleteChatMessage(id)` — vain adminille (RLS estää muut joka tapauksessa, mutta UI
