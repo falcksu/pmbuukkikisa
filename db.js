@@ -102,6 +102,45 @@
     }
   }
 
+  // ── Yhteyden varmistus ennen kirjausta ─────────────────────────
+  // Viikkoja auki ollut välilehti voi kantaa vanhentunutta istuntoa ja kuollutta
+  // realtime-yhteyttä. Ilman tätä kirjaus epäonnistuu tai jää roikkumaan, ja
+  // käyttäjä näkee luvun ruudulla vaikka mitään ei tallennu. Varmistetaan tila
+  // JOKAISEN kirjauksen yhteydessä — ei pelkän taustapäivityksen varassa.
+  function reconnectRealtimeIfDead() {
+    try {
+      if (client && client.realtime && typeof client.realtime.isConnected === 'function') {
+        if (!client.realtime.isConnected() && typeof client.realtime.connect === 'function') {
+          client.realtime.connect();
+        }
+      }
+    } catch (e) { /* ei saa kaataa kirjausta */ }
+  }
+
+  async function ensureLiveSession() {
+    if (!client) return { ok: true };
+    if (!client.auth || typeof client.auth.getSession !== 'function') return { ok: true };
+    try {
+      const { data } = await withTimeout(client.auth.getSession(), 'Yhteyden tarkistus');
+      const session = data && data.session;
+      if (!session) {
+        return { ok: false, error: { message: 'Istunto on vanhentunut — kirjaudu uudelleen sisään.' } };
+      }
+      // Uusi token jos se vanhenee alle kahden minuutin kuluttua (tai on jo mennyt)
+      const expiresMs = (session.expires_at || 0) * 1000;
+      if (expiresMs && expiresMs - Date.now() < 120000 && typeof client.auth.refreshSession === 'function') {
+        const r = await withTimeout(client.auth.refreshSession(), 'Istunnon uusiminen');
+        if (r && r.error) {
+          return { ok: false, error: { message: 'Istunto on vanhentunut — kirjaudu uudelleen sisään.' } };
+        }
+      }
+      reconnectRealtimeIfDead();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: { message: (e && e.message) || 'Yhteyttä ei saatu varmistettua.' } };
+    }
+  }
+
   // Hakee taulun KOKONAAN sivuttamalla. Virhetilanteessa palauttaa null (ei vajaita
   // rivejä) — kutsuja päättää turvallisen degradaation.
   async function fetchPaged(table) {
@@ -339,6 +378,8 @@
       saveLocalDaily(rows); notifyDaily(rows);
       return { ok: true, row };
     }
+    const health = await ensureLiveSession();
+    if (!health.ok) return { ok: false, error: health.error };
     try {
       const { data, error } = await withTimeout(
         client.rpc('bump_daily_stat', { p_field: field, p_delta: delta, p_client_date: clientDate || null }),
@@ -387,6 +428,8 @@
       p_buukit: Math.max(0, stats.buukit || 0),
       p_tapaamiset: Math.max(0, stats.tapaamiset || 0),
     };
+    const health = await ensureLiveSession();
+    if (!health.ok) return { ok: false, error: health.error };
     try {
       const { data, error } = await withRetryIdempotent(
         function () { return client.rpc('set_daily_stats', args); }, 'Päivän tallennus');
@@ -482,6 +525,8 @@
   async function upsertDeal(deal) {
     if (client) {
       // Ei saa koskaan heittää eikä roikkua — kutsuja luottaa {ok}-vastaukseen.
+      const health = await ensureLiveSession();
+      if (!health.ok) return { ok: false, error: health.error, deal: deal };
       try {
         const { error } = await withTimeout(client.from('deals').upsert(deal), 'Kaupan tallennus');
         if (error) { console.error('upsertDeal error:', error); return { ok: false, error, deal }; }
