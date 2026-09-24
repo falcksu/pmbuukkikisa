@@ -38,14 +38,16 @@ function loadDB(opts) {
     assert(calls.rpc === 1, 'RPC kutsuttiin');
   }
 
-  // 2) Pian vanhentuva istunto → uusitaan AUTOMAATTISESTI ennen kirjausta
+  // 2) Pian vanhentuva istunto → EI erillistä refreshSession()-kutsua. getSession()
+  //    uusii vanhentuneen tokenin itse; erillinen uusinta laukaisi TOKEN_REFRESHED-
+  //    tapahtuman auth-lukon sisällä (lukkiutumisriski, ks. auth-deadlock.test.js).
   {
     const { DB, calls } = loadDB({
       getSession: () => Promise.resolve({ data: { session: { expires_at: Math.floor(Date.now()/1000) + 30 } } }),
     });
     const res = await DB.bumpDailyStat('luurit', 1, '2026-08-25');
-    assert(calls.refresh === 1, 'vanhentumassa oleva istunto uusittiin, refresh=' + calls.refresh);
-    assert(res.ok === true, 'kirjaus onnistuu uusimisen jälkeen');
+    assert(calls.refresh === 0, 'ei erillistä refreshSession-kutsua, refresh=' + calls.refresh);
+    assert(res.ok === true, 'kirjaus onnistuu');
   }
 
   // 3) Ei istuntoa lainkaan → selkeä ohje, EI hiljaista epäonnistumista

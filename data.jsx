@@ -640,6 +640,35 @@ function aggregatePlayersForPeriod(playersMap, dailyStats, deals, startKey, endK
   return out;
 }
 
+// ── Päivärivien yhdistäminen ────────────────────────────
+// Taustahaku (fokus, realtime, ajastin) voi lähteä ENNEN kirjausta ja palata sen
+// JÄLKEEN. Silloin haun vanha rivi pyyhkisi juuri tallennetun luvun näytöltä.
+// Pidetään paikallinen rivi, jos se on palvelimen mukaan tuoreempi (updated_at),
+// tai jos se on juuri kirjattu eikä haku vielä tunne sitä.
+//   local, incoming: daily_stats-rivejä; nowMs: nykyhetki; graceMs: kuinka kauan
+//   hausta puuttuvaa tuoretta riviä pidetään.
+function dailyRowKey(r) { return r.player_id + '|' + r.date_key; }
+function mergeDailyRows(local, incoming, nowMs, graceMs) {
+  const grace = graceMs == null ? 15000 : graceMs;
+  const now = nowMs == null ? Date.now() : nowMs;
+  const localBy = {};
+  (local || []).forEach((r) => { localBy[dailyRowKey(r)] = r; });
+  const seen = {};
+  const out = (incoming || []).map((r) => {
+    const k = dailyRowKey(r);
+    seen[k] = true;
+    const l = localBy[k];
+    if (l && l.updated_at && r.updated_at && Date.parse(l.updated_at) > Date.parse(r.updated_at)) return l;
+    return r;
+  });
+  (local || []).forEach((r) => {
+    const k = dailyRowKey(r);
+    if (seen[k]) return;
+    if (r._savedAt && now - r._savedAt < grace) out.push(r);
+  });
+  return out;
+}
+
 // ── Auth (osaprojekti B) ────────────────────────────
 // Palauttaa näkymän: 'auth' (ei sessiota), 'link' (sessio ilman pelaajaa), 'app' (valmis)
 function resolveAuthGate(session, linkedPlayer) {
@@ -676,6 +705,6 @@ Object.assign(window, {
   EMPTY_PLAYOFF, MATCH_ORDER,
   setMatchWinner, clearMatchWinner, startPlayoffs, resetPlayoffs, recomputeAdvancement, migratePlayoff,
   WEEKDAY_DATE_KEYS, weekdayIndexToDateKey, dateKeyToWeekdayIndex, recalcPlayerFromDailyStats, recalcPlayerFromDeals, dealLeadTimeDays, newDealId,
-  recentDayKeys, currentBuukitStreak, recentDayLabels,
+  recentDayKeys, currentBuukitStreak, recentDayLabels, mergeDailyRows,
   EMPTY_PLAYOUT, startPlayout, setSakko, clearSakko, resetPlayout,
 });

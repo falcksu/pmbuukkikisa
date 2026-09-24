@@ -890,7 +890,7 @@ input { font: inherit; color: inherit; }
 .table-head .ctr { text-align: center; }
 
 .row {
-  padding: 14px 16px;
+  padding: var(--row-pad-y, 14px) 16px;
   border-bottom: 1px solid var(--line);
   position: relative;
   cursor: pointer;

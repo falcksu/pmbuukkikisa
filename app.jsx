@@ -1447,19 +1447,28 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
   // Admin: group daily_stats by date, then by player
   const allPlayers = players;
 
-  // Load form when day changes (player view)
+  // Lataa lomake kun päivä vaihtuu (pelaajanäkymä). Taustapäivitys (realtime,
+  // fokus, 5 min ajastin) EI saa pyyhkiä käyttäjän tallentamattomia muutoksia:
+  // aiemmin lomake nollautui kesken täytön ja käyttäjä tallensi vanhat luvut,
+  // vaikka ruutu näytti "✓ TALLENNETTU".
+  const formDirtyRef = useRef(false);
+  const formSlotRef = useRef(null);
   useEffect(() => {
     if (isAdmin) return;
+    const slot = currentKey + '|' + dateKey;
+    if (formSlotRef.current === slot && formDirtyRef.current) return;
+    formSlotRef.current = slot;
+    formDirtyRef.current = false;
     const row = dailyStats.find(r => r.player_id === currentKey && r.date_key === dateKey);
     setForm(row ? { luurit: row.luurit||0, vastatut: row.vastatut||0, buukit: row.buukit||0, tapaamiset: row.tapaamiset||0 } : { luurit:0, vastatut:0, buukit:0, tapaamiset:0 });
-  }, [selDate, dailyStats, currentKey, dateKey, isAdmin]);
+  }, [dailyStats, currentKey, dateKey, isAdmin]);
 
-  const adj = (field, delta) => setForm(prev => {
+  const adj = (field, delta) => { formDirtyRef.current = true; setForm(prev => {
     const next = { ...prev, [field]: Math.max(0, (prev[field]||0) + delta) };
     if (field === 'buukit' && next.buukit > next.vastatut) next.buukit = next.vastatut;
     if (field === 'vastatut' && next.vastatut > next.luurit) next.vastatut = next.luurit;
     return next;
-  });
+  }); };
 
   const handleSave = async () => {
     if (saving) return;
@@ -1478,6 +1487,7 @@ function DailyReport({ currentKey, isAdmin, dailyStats, players, onSaveDay, deal
       setQueued(true);
       setTimeout(() => setQueued(false), 4000);
     } else if (!res || res.ok !== false) {
+      formDirtyRef.current = false; // palvelimen luvut saavat taas päivittää lomakkeen
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     }
@@ -1846,12 +1856,13 @@ function SetPasswordScreen({ onDone }) {
   );
 }
 
-function ConnectionErrorScreen() {
+function ConnectionErrorScreen({ detail }) {
   return (
     <div className="conn-error-wrap">
       <div className="conn-error">
         <div className="conn-error-badge">YHTEYSVIRHE</div>
         <h1 className="conn-error-title">Tietokantayhteyttä ei saatu</h1>
+        {detail && <p className="conn-error-lead">{detail} Tämä on latausvirhe — jo tallennetut tilastot eivät katoa.</p>}
         <p className="conn-error-lead">
           <strong>Älä kirjaa tuloksia nyt.</strong> Kirjaukset eivät tallentuisi mihinkään
           eivätkä näkyisi muille.
@@ -2228,6 +2239,7 @@ function App() {
   const [session, setSession] = useState(null);
   const [linkedPlayer, setLinkedPlayer] = useState(null);
   const [authReady, setAuthReady] = useState(() => !DB.hasAuth); // local: valmis heti
+  const [loadError, setLoadError] = useState(null); // alkulataus epäonnistui → ei näytetä nollia
 
   // Persistent state — pelaajat tulee DB:stä (Supabase tai LS fallback)
   const [playersMap, setPlayersMap] = useState({});
@@ -2274,6 +2286,7 @@ function App() {
   const goalsRef      = useRef({});
   const h2hRef        = useRef(null);
   const isAdminRef    = useRef(false); // vakaa admin-tarkistus callbackeille
+  const pendingBumpsRef = useRef(0);    // matkalla olevat pikakirjaukset
 
   function applyDerivedToPlayers(rawMap, rows, dealRows) {
     // Jos daily/deals-haku epäonnistui, EI lasketa johdettuja arvoja vajaista
@@ -2301,19 +2314,41 @@ function App() {
   useEffect(() => {
     if (!DB.hasAuth) return;
     let unsub;
+    let cancelled = false;
     (async () => {
-      const s = await DB.getSession();
-      setSession(s);
-      if (s) { const p = await DB.fetchMyPlayer(s.user.id); setLinkedPlayer(p); }
-      setAuthReady(true);
-      unsub = DB.onAuthChange(async (ns, event) => {
-        if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
-        setSession(ns);
-        if (ns) { const p = await DB.fetchMyPlayer(ns.user.id); setLinkedPlayer(p); }
-        else { setLinkedPlayer(null); }
-      });
+      try {
+        const s = await DB.getSession();
+        if (cancelled) return;
+        setSession(s);
+        if (s) {
+          const r = await DB.fetchMyPlayerSafe(s.user.id);
+          if (cancelled) return;
+          // Verkkovirhe ≠ "ei pelaajaa": ei heitetä myyjää rekisteröitymisnäkymään
+          if (!r.ok) { setLoadError((r.error && r.error.message) || 'Profiilin haku epäonnistui.'); return; }
+          setLinkedPlayer(r.player);
+        }
+      } catch (e) {
+        if (!cancelled) setLoadError((e && e.message) || 'Yhteyttä ei saatu.');
+        return;
+      } finally {
+        if (!cancelled) setAuthReady(true); // AINA — muuten "Ladataan…" ikuisesti
+      }
     })();
-    return () => { if (unsub) unsub(); };
+    // Kuuntelija rekisteröidään heti (DB.onAuthChange ajaa työn auth-lukon
+    // ulkopuolella, joten Supabase-kutsut tässä ovat turvallisia).
+    unsub = DB.onAuthChange(async (ns, event) => {
+      if (cancelled) return;
+      if (event === 'PASSWORD_RECOVERY') setRecoveryMode(true);
+      if (event === 'SIGNED_OUT' || !ns) { setSession(null); setLinkedPlayer(null); return; }
+      setSession(ns);
+      // Tokenin uusinta ei muuta pelaajaa → ei turhaa hakua
+      if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') return;
+      const r = await DB.fetchMyPlayerSafe(ns.user.id);
+      if (cancelled) return;
+      // Virheessä pidetään nykyinen pelaaja (ei pudoteta rekisteröitymiseen)
+      if (r.ok) setLinkedPlayer((prev) => (prev && r.player && prev.key === r.player.key) ? prev : r.player);
+    });
+    return () => { cancelled = true; if (unsub) unsub(); };
   }, []);
 
   // Tuotannossa currentKey seuraa linkitettyä pelaajaa
@@ -2325,8 +2360,18 @@ function App() {
   useEffect(() => {
     if (DB.hasAuth && !linkedPlayer) return;
     let unsubP, unsubPO, unsubPout, unsubD, unsubDeals, unsubGoals, unsubH2H;
+    let cancelled = false;
     (async () => {
-      const initial = await DB.init();
+      let initial;
+      try { initial = await DB.init(); }
+      catch (e) { if (!cancelled) setLoadError((e && e.message) || 'Tietojen lataus epäonnistui.'); return; }
+      if (cancelled) return;
+      // Pelaajat tai päivärivit eivät latautuneet → EI näytetä nollia ikään kuin
+      // tilastot olisivat kadonneet, vaan kerrotaan suoraan ja tarjotaan uusintaa.
+      if (DB.fetchHealth && (DB.fetchHealth.players === false || DB.fetchHealth.daily === false)) {
+        setLoadError('Tilastoja ei saatu ladattua palvelimelta.');
+        return;
+      }
       const rawPlayers = initial.players || {};
       const dailyRows  = initial.daily   || [];
       const dealRows   = initial.deals   || [];
@@ -2377,9 +2422,13 @@ function App() {
         playoutRef.current = next;
         setPlayout(next);
       });
-      unsubD = DB.subscribeDaily((rows) => {
+      unsubD = DB.subscribeDaily((incoming) => {
+        // Taustahaku ei saa pyyhkiä juuri tallennettua lukua (ks. mergeDailyRows)
+        const rows = mergeDailyRows(dailyRef.current, incoming);
         dailyRef.current = rows;
         setDailyStats(rows);
+        // Kesken olevat pikakirjaukset lasketaan näyttöön kun ne palaavat (settle)
+        if (pendingBumpsRef.current > 0) return;
         const recalced = applyDerivedToPlayers(playersMapRef.current, rows, dealsRef.current);
         playersMapRef.current = recalced;
         setPlayersMap(recalced);
@@ -2402,6 +2451,7 @@ function App() {
       });
     })();
     return () => {
+      cancelled = true;
       if (unsubP) unsubP();
       if (unsubPO) unsubPO();
       if (unsubPout) unsubPout();
@@ -2431,13 +2481,11 @@ function App() {
 
   // theme/accent/density
   useEffect(() => { document.documentElement.setAttribute('data-theme', t.theme); }, [t.theme]);
+  // CSS-muuttuja: aiemmin jokainen renderöinti kävi kaikki rivit läpi DOMista
   useEffect(() => {
     const padMap = { compact: '9px', regular: '14px', comfy: '20px' };
-    document.querySelectorAll('.row').forEach(el => {
-      el.style.paddingTop = padMap[t.density];
-      el.style.paddingBottom = padMap[t.density];
-    });
-  });
+    document.documentElement.style.setProperty('--row-pad-y', padMap[t.density] || '14px');
+  }, [t.density]);
   useEffect(() => { document.documentElement.style.setProperty('--accent', t.accent); }, [t.accent]);
 
   const sorted = useMemo(() => decoratePlayers(playersMap), [playersMap]);
@@ -2746,23 +2794,47 @@ function App() {
     playersMapRef.current = { ...playersMapRef.current, [currentKey]: next };
     setPlayersMap((prev) => ({ ...prev, [currentKey]: next }));
 
+    pendingBumpsRef.current += 1;
+    const myKey = currentKey;
+    // Näytön luvut = päivärivit (palvelimen totuus) + vielä matkalla olevat kirjaukset.
+    // Kun kaikki kirjaukset ovat palanneet, lasketaan näyttö suoraan riveistä.
+    const settle = () => {
+      pendingBumpsRef.current = Math.max(0, pendingBumpsRef.current - 1);
+      if (pendingBumpsRef.current === 0) {
+        const recalced = applyDerivedToPlayers(playersMapRef.current, dailyRef.current, dealsRef.current);
+        playersMapRef.current = recalced;
+        setPlayersMap(recalced);
+      }
+    };
     (async () => {
-      const res = await DB.bumpDailyStat(field, delta, dateKey2);
+      let res;
+      try { res = await DB.bumpDailyStat(field, delta, dateKey2); }
+      catch (e) { res = { ok: false, error: { message: (e && e.message) || 'Kirjaus ei tallentunut.' } }; }
       if (res && res.ok === false) {
-        // Peru optimistinen päivitys ja kerro käyttäjälle — ei haamulukuja
-        playersMapRef.current = { ...playersMapRef.current, [currentKey]: cur };
-        setPlayersMap((prev) => ({ ...prev, [currentKey]: cur }));
+        // Peru TÄMÄ kirjaus (ei palauteta vanhaa kuvaa — se pyyhkisi muut
+        // samaan aikaan matkalla olevat klikkaukset) ja kerro käyttäjälle.
+        const now = playersMapRef.current[myKey];
+        if (now && pendingBumpsRef.current > 1) {
+          const back = { ...now, [field]: Math.max(0, (now[field] || 0) - delta) };
+          playersMapRef.current = { ...playersMapRef.current, [myKey]: back };
+          setPlayersMap((prev) => ({ ...prev, [myKey]: back }));
+        }
         setSaveError((res.error && res.error.message) || 'Kirjaus ei tallentunut.');
+        settle();
         return;
       }
       setSaveError(null);
       // Käytä PALVELIMEN palauttamaa riviä totuutena (ei clientin laskelmaa)
       const srv = res && res.row;
-      if (srv && srv.date_key) {
+      const existing = srv && (dailyRef.current || []).find(r => r.player_id === (srv.player_id || myKey) && r.date_key === srv.date_key);
+      // Vastaukset voivat palata eri järjestyksessä — vanhempi ei korvaa uudempaa
+      const stale = existing && existing.updated_at && srv.updated_at && Date.parse(existing.updated_at) > Date.parse(srv.updated_at);
+      if (srv && srv.date_key && !stale) {
         const merged = [
-          ...(dailyRef.current || []).filter(r => !(r.player_id === (srv.player_id || currentKey) && r.date_key === srv.date_key)),
-          { id: srv.id, player_id: srv.player_id || currentKey, date_key: srv.date_key,
-            luurit: srv.luurit || 0, vastatut: srv.vastatut || 0, buukit: srv.buukit || 0, tapaamiset: srv.tapaamiset || 0 },
+          ...(dailyRef.current || []).filter(r => !(r.player_id === (srv.player_id || myKey) && r.date_key === srv.date_key)),
+          { id: srv.id, player_id: srv.player_id || myKey, date_key: srv.date_key,
+            luurit: srv.luurit || 0, vastatut: srv.vastatut || 0, buukit: srv.buukit || 0, tapaamiset: srv.tapaamiset || 0,
+            updated_at: srv.updated_at, _savedAt: Date.now() },
         ];
         dailyRef.current = merged;
         setDailyStats(merged);
@@ -2774,6 +2846,7 @@ function App() {
           setSaveWarning(null);
         }
       }
+      settle();
     })();
     void prevDaily;
 
@@ -2863,17 +2936,24 @@ function App() {
       return { ok: false, queued: !!saveRes.queued };
     }
     setSaveError(null);
+    // Päivitä myös refit: muuten seuraava pikakirjaus / taustahaku laski näytön
+    // vanhoista riveistä ja tallennettu raportti "katosi" ruudulta.
+    const srv = saveRes && saveRes.row;
+    const newRow = { id: (srv && srv.id) || currentKey+'_'+dateKey, player_id: currentKey, date_key: dateKey, ...stats,
+                     updated_at: srv && srv.updated_at, _savedAt: Date.now() };
     const updatedDaily = [
-      ...dailyStats.filter(r => !(r.player_id === currentKey && r.date_key === dateKey)),
-      { id: currentKey+'_'+dateKey, player_id: currentKey, date_key: dateKey, ...stats },
+      ...(dailyRef.current || []).filter(r => !(r.player_id === currentKey && r.date_key === dateKey)),
+      newRow,
     ];
+    dailyRef.current = updatedDaily;
     setDailyStats(updatedDaily);
-    const myRows = updatedDaily.filter(r => r.player_id === currentKey);
-    const base = playersMap[currentKey];
-    if (!base) return;
-    const recalced = recalcPlayerFromDailyStats(base, myRows);
-    setPlayersMap(prev => ({ ...prev, [currentKey]: recalced }));
-    DB.upsertPlayer(recalced);
+    const base = playersMapRef.current[currentKey];
+    if (!base) return { ok: true };
+    const recalced = applyDerivedToPlayers(playersMapRef.current, updatedDaily, dealsRef.current);
+    playersMapRef.current = recalced;
+    setPlayersMap(recalced);
+    // (Ei DB.upsertPlayer-kutsua: totaalit lasketaan päiväriveistä. Turha pelaajarivin
+    // kirjoitus laukaisi jokaisella koneella koko pelaajataulun uudelleenhaun.)
     // Add ticker entries for saved buukkeja
     if (stats.buukit > 0) {
       const now = new Date();
@@ -2884,7 +2964,7 @@ function App() {
       ]);
     }
     return { ok: true };
-  }, [currentKey, dailyStats, playersMap]);
+  }, [currentKey]);
 
   // Salasanan palautuslinkistä saapunut → näytä uuden salasanan lomake
   if (recoveryMode) {
@@ -2895,6 +2975,9 @@ function App() {
   // Konfiguroitu Supabaseen mutta yhteyttä ei ole → estä kirjaaminen kokonaan.
   if (DB.offlineMisconfig) {
     return <ConnectionErrorScreen />;
+  }
+  if (loadError) {
+    return <ConnectionErrorScreen detail={loadError} />;
   }
 
   // ── Auth gate ───────────────────────────

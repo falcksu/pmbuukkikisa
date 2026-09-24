@@ -16,15 +16,11 @@
       client = window.supabase.createClient(cfg.url, cfg.anonKey, {
         realtime: { params: { eventsPerSecond: 5 } },
         auth: {
-          // supabase-js v2 sarjallistaa token-päivityksen selaimen Web Locks
-          // -lukolla (navigatorLock). Jos lukko jää toiselle välilehdelle jumiin
-          // — esim. taustoitettu tai kaatunut välilehti — TÄMÄN välilehden kaikki
-          // REST/RPC-kutsut jäävät odottamaan lukkoa eivätkä lähde koskaan.
-          // Oire: 15 s aikakatkaisu, NOLLA pyyntöä palvelimella, mutta istunto
-          // päivittyy normaalisti siinä toisessa välilehdessä. Osuu juuri niihin,
-          // joilla sivu on auki koko päivän / useammalla laitteella.
-          // Läpimenevä lukko poistaa jumin. Haittapuoli on korkeintaan se, että
-          // kaksi välilehteä voi päivittää tokenin päällekkäin — vaaratonta.
+          // Läpimenevä lukko: selaimen Web Locks -lukko (navigatorLock) on jaettu
+          // välilehtien kesken, joten yhden välilehden jumi levisi kaikkiin.
+          // HUOM: tämä EI yksin estä lukkiutumista — auth-js:llä on myös oma
+          // välilehden sisäinen jono. Varsinainen korjaus on onAuthChange-
+          // kuuntelijassa (ks. alla): kuuntelija ei saa odottaa Supabase-kutsuja.
           lock: function (_name, _acquireTimeout, fn) { return fn(); },
         },
       });
@@ -117,6 +113,7 @@
     } catch (e) { /* ei saa kaataa kirjausta */ }
   }
 
+  let currentUserId = null; // jonon kirjaukset sidotaan kirjoittajaansa
   async function ensureLiveSession() {
     if (!client) return { ok: true };
     if (!client.auth || typeof client.auth.getSession !== 'function') return { ok: true };
@@ -126,14 +123,10 @@
       if (!session) {
         return { ok: false, error: { message: 'Istunto on vanhentunut — kirjaudu uudelleen sisään.' } };
       }
-      // Uusi token jos se vanhenee alle kahden minuutin kuluttua (tai on jo mennyt)
-      const expiresMs = (session.expires_at || 0) * 1000;
-      if (expiresMs && expiresMs - Date.now() < 120000 && typeof client.auth.refreshSession === 'function') {
-        const r = await withTimeout(client.auth.refreshSession(), 'Istunnon uusiminen');
-        if (r && r.error) {
-          return { ok: false, error: { message: 'Istunto on vanhentunut — kirjaudu uudelleen sisään.' } };
-        }
-      }
+      if (session.user && session.user.id) currentUserId = session.user.id;
+      // EI erillistä refreshSession()-kutsua: getSession() uusii vanhentuneen
+      // tokenin itse, ja erillinen uusinta laukaisi TOKEN_REFRESHED-tapahtuman
+      // auth-lukon sisällä (lukkiutumisriski, ks. onAuthChange).
       reconnectRealtimeIfDead();
       return { ok: true };
     } catch (e) {
@@ -147,7 +140,12 @@
     let out = [];
     let from = 0;
     for (;;) {
-      const { data, error } = await client.from(table).select('*').range(from, from + PAGE_SIZE - 1);
+      let res;
+      try {
+        // Aikakatkaisu: hyytynyt haku piti ennen sivua "Ladataan…"-tilassa ikuisesti
+        res = await withTimeout(client.from(table).select('*').range(from, from + PAGE_SIZE - 1), 'Haku (' + table + ')');
+      } catch (e) { console.error('fetch ' + table + ' exception:', e && e.message); return null; }
+      const { data, error } = res;
       if (error) { console.error('fetch ' + table + ' error:', error); return null; }
       const batch = data || [];
       out = out.concat(batch);
@@ -414,9 +412,19 @@
     return function () { outboxListeners = outboxListeners.filter(function (x) { return x !== cb; }); };
   }
   function enqueueDaily(dateKey, stats) {
-    const q = loadOutbox().filter(function (x) { return x.dateKey !== dateKey; }); // uusin voittaa
-    q.push({ dateKey: dateKey, stats: stats, ts: Date.now() });
+    const q = loadOutbox().filter(function (x) { return !sameSlot(x, dateKey); }); // uusin voittaa
+    q.push({ dateKey: dateKey, stats: stats, ts: Date.now(), uid: currentUserId });
     storeOutbox(q);
+  }
+  function sameSlot(item, dateKey) {
+    return item.dateKey === dateKey && (!item.uid || !currentUserId || item.uid === currentUserId);
+  }
+  // Onnistunut tallennus poistaa saman päivän VANHEMMAN jonokirjauksen — muuten
+  // jono lähettäisi myöhemmin vanhat luvut tuoreiden päälle.
+  function dropQueued(dateKey, olderThanTs) {
+    const q = loadOutbox();
+    const next = q.filter(function (x) { return !(sameSlot(x, dateKey) && (x.ts || 0) <= olderThanTs); });
+    if (next.length !== q.length) storeOutbox(next);
   }
 
   // Lähettää yhden päivän luvut. EI koske jonoon — kutsuja päättää.
@@ -442,28 +450,41 @@
   }
 
   // Purkaa jonon. Ajetaan latauksessa, kun välilehti palaa näkyviin ja kun verkko palaa.
-  async function flushOutbox() {
-    if (!client) return { sent: 0, left: 0 };
-    const q = loadOutbox();
-    if (!q.length) return { sent: 0, left: 0 };
-    let sent = 0;
-    const left = [];
-    for (const item of q) {
-      const res = await sendDailyStats(item.dateKey, item.stats);
-      if (res && res.ok) sent++; else left.push(item);
-    }
-    storeOutbox(left);
-    return { sent: sent, left: left.length };
+  // Yksi purku kerrallaan (visibilitychange + focus laukeavat yhtä aikaa). Poistaa
+  // jonosta VAIN lähetetyt kirjaukset — purun aikana jonoon tullut uusi kirjaus säilyy.
+  let flushing = null;
+  function flushOutbox() {
+    if (!client) return Promise.resolve({ sent: 0, left: 0 });
+    if (flushing) return flushing;
+    flushing = (async function () {
+      const q = loadOutbox();
+      if (!q.length) return { sent: 0, left: 0 };
+      let sent = 0;
+      for (const item of q) {
+        // Toisen käyttäjän (samalla koneella) kirjausta ei lähetetä tämän tunnuksella
+        if (item.uid && currentUserId && item.uid !== currentUserId) continue;
+        const res = await sendDailyStats(item.dateKey, item.stats);
+        if (res && res.ok) {
+          sent++;
+          const cur = loadOutbox();
+          storeOutbox(cur.filter(function (x) { return !(x.dateKey === item.dateKey && x.ts === item.ts); }));
+        }
+      }
+      return { sent: sent, left: loadOutbox().length };
+    })();
+    return flushing.finally(function () { flushing = null; });
   }
 
   // Päiväraportin tallennus. Epäonnistuessa kirjaus EI katoa vaan jää jonoon.
   async function setDailyStatsRemote(dateKey, stats) {
     if (!client) return upsertDailyStats('__local__', dateKey, stats);
+    const startedAt = Date.now();
     const res = await sendDailyStats(dateKey, stats);
     if (!res.ok) {
       enqueueDaily(dateKey, stats);
       return { ok: false, error: res.error, queued: true };
     }
+    dropQueued(dateKey, startedAt);
     return res;
   }
 
@@ -605,6 +626,16 @@
   }
 
   // ── Init ─────────────────────────
+  // Kuuntelijat, ajastin ja realtime-kanavat kytketään VAIN kerran. Aiemmin jokainen
+  // uudelleenlinkitys (esim. tokenin uusinnan jälkeen) ajoi init():n uudestaan ja
+  // kasasi päällekkäisiä kuuntelijoita → jokainen fokus laukaisi N täyshakua.
+  let wired = false;
+  // Toissijainen haku (meta) ei saa pysäyttää koko sivun latausta
+  function soft(promise, fallback) {
+    return withTimeout(promise, 'Haku').catch(function (e) {
+      console.warn('init: ' + (e && e.message)); return fallback;
+    });
+  }
   async function init() {
     // Rinnakkain — aiemmin 7 peräkkäistä edestakaista kutsua ketjussa, mikä
     // hidasti ensilatausta suoraan niiden summalla.
@@ -612,26 +643,47 @@
       initialPlayers, initialPlayoff, initialPlayout,
       initialDaily, initialDeals, initialGoals, initialH2H,
     ] = await Promise.all([
-      fetchAll(), fetchPlayoff(), fetchPlayout(),
-      fetchAllDailyStats(), fetchAllDeals(), fetchGoals(), fetchH2H(),
+      fetchAll(), soft(fetchPlayoff(), null), soft(fetchPlayout(), null),
+      fetchAllDailyStats(), fetchAllDeals(), soft(fetchGoals(), {}), soft(fetchH2H(), null),
     ]);
-    if (client) {
+    if (client && !wired) {
+      wired = true;
       const REFRESH_MS = 400; // yhdistä ryöpyt yhdeksi hauksi
       // Realtime-yhteys voi kuolla hiljaa (kone nukkuu, verkko vaihtuu, palomuuri
       // estää websocketit). Silloin paikallinen kopio jäätyy. Haetaan tuore data
       // aina kun välilehti palaa näkyviin tai verkko palautuu.
-      const refreshAll = async () => {
-        await flushOutbox(); // lähetä ensin jonossa odottavat kirjaukset
-        const [p, d, dl] = await Promise.all([fetchAll(), fetchAllDailyStats(), fetchAllDeals()]);
-        notify(p); notifyDaily(d); notifyDeals(dl);
+      // Yksi päivitys kerrallaan, ja fokus/näkyvyys-päivitykset harvennetaan:
+      // visibilitychange + focus laukeavat yleensä peräkkäin, ja jokainen täyshaku
+      // hakee kaikki taulut → sivu tuntui tahmealta jokaisella välilehden vaihdolla.
+      let refreshing = null;
+      let lastRefresh = Date.now();
+      const refreshAll = (force) => {
+        if (refreshing) return refreshing;
+        if (force !== true && Date.now() - lastRefresh < 20000) return Promise.resolve();
+        lastRefresh = Date.now();
+        refreshing = (async () => {
+          try {
+            await flushOutbox(); // lähetä ensin jonossa odottavat kirjaukset
+            const [p, d, dl] = await Promise.all([fetchAll(), fetchAllDailyStats(), fetchAllDeals()]);
+            // Epäonnistunut haku EI saa korvata näytöllä olevia lukuja tyhjällä —
+            // muuten verkkokatkos näytti kaikille nollia ("tilastot katosivat").
+            if (fetchHealth.players) notify(p);
+            if (fetchHealth.daily) notifyDaily(d);
+            if (fetchHealth.deals) notifyDeals(dl);
+          } catch (e) { console.warn('refreshAll:', e && e.message); }
+        })().finally(() => { refreshing = null; });
+        return refreshing;
       };
       if (typeof document !== 'undefined' && document.addEventListener) {
         document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshAll(); });
       }
       if (typeof window !== 'undefined' && window.addEventListener) {
-        window.addEventListener('online', refreshAll);
-        window.addEventListener('focus', refreshAll);
+        window.addEventListener('online', () => refreshAll(true));
+        window.addEventListener('focus', () => refreshAll());
       }
+      // Edellisellä käynnillä jonoon jääneet kirjaukset lähtevät heti latauksessa
+      // (ei odoteta ensimmäistä fokusta). Ei viivästytä sivun avautumista.
+      flushOutbox().then((r) => { if (r && r.sent) refreshAll(true); }).catch(() => {});
       // Välilehti voi olla auki päiviä ilman että se koskaan menettää fokusta.
       // Jos realtime-yhteys on kuollut hiljaa, näytöllä olevat luvut jäätyvät
       // eikä käyttäjä huomaa mitään. Haetaan tuore tila säännöllisesti, jotta
@@ -642,11 +694,11 @@
       // auki taustalle koko päiväksi.
       setInterval(function () {
         if (typeof document !== 'undefined' && document.hidden) return;
-        refreshAll();
+        refreshAll(true);
       }, 5 * 60 * 1000);
-      const refreshPlayers = debounced(async () => { const fresh = await fetchAll(); notify(fresh); }, REFRESH_MS);
-      const refreshDaily   = debounced(async () => { const fresh = await fetchAllDailyStats(); notifyDaily(fresh); }, REFRESH_MS);
-      const refreshDeals   = debounced(async () => { const fresh = await fetchAllDeals(); notifyDeals(fresh); }, REFRESH_MS);
+      const refreshPlayers = debounced(async () => { const fresh = await fetchAll(); if (fetchHealth.players) notify(fresh); }, REFRESH_MS);
+      const refreshDaily   = debounced(async () => { const fresh = await fetchAllDailyStats(); if (fetchHealth.daily) notifyDaily(fresh); }, REFRESH_MS);
+      const refreshDeals   = debounced(async () => { const fresh = await fetchAllDeals(); if (fetchHealth.deals) notifyDeals(fresh); }, REFRESH_MS);
       client
         .channel('public:players')
         .on('postgres_changes',
@@ -698,14 +750,29 @@
   async function signIn(email, password) { return client.auth.signInWithPassword({ email, password }); }
   async function signOut() { return client.auth.signOut(); }
   async function getSession() {
-    const { data } = await client.auth.getSession();
+    const { data } = await withTimeout(client.auth.getSession(), 'Istunnon haku');
     return data ? data.session : null;
   }
   function onAuthChange(cb) {
     // Tapahtuma välitetään kutsujalle: mm. 'PASSWORD_RECOVERY' kertoo että
     // käyttäjä saapui salasanan palautuslinkistä ja hänelle pitää näyttää
     // uuden salasanan asetuslomake.
-    const { data } = client.auth.onAuthStateChange((event, s) => cb(s, event));
+    //
+    // KRIITTINEN: supabase-js (auth-js 2.65) ODOTTAA kuuntelijaa auth-lukon ollessa
+    // varattuna. Jos kuuntelija odottaa Supabase-kutsua (esim. fetchMyPlayer),
+    // kutsu jää jonoon saman lukon taakse → PYSYVÄ lukkiutuminen: yksikään
+    // kysely tai kirjaus ei enää lähde välilehdeltä ennen sivun uudelleenlatausta.
+    // Laukaisijat: välilehden palaaminen näkyviin, tunnin välein tapahtuva tokenin
+    // uusinta. Oire kentällä: "Tallennetaan…" → 15 s aikakatkaisu, nolla pyyntöä
+    // palvelimelle. Siksi kuuntelija palaa HETI ja työ ajetaan seuraavalla kierroksella.
+    const { data } = client.auth.onAuthStateChange((event, s) => {
+      setTimeout(() => {
+        try {
+          const r = cb(s, event);
+          if (r && typeof r.catch === 'function') r.catch((e) => console.error('onAuthChange:', e));
+        } catch (e) { console.error('onAuthChange:', e); }
+      }, 0);
+    });
     return () => { try { data.subscription.unsubscribe(); } catch (e) {} };
   }
 
@@ -733,9 +800,24 @@
     return data || [];
   }
   async function fetchMyPlayer(authId) {
-    const { data, error } = await client.from('players').select('*').eq('auth_id', authId).maybeSingle();
+    const { data, error } = await withTimeout(
+      client.from('players').select('*').eq('auth_id', authId).maybeSingle(), 'Profiilin haku');
     if (error) { console.error('fetchMyPlayer error:', error); return null; }
     return data ? rowToPlayer(data) : null;
+  }
+  // Kuten fetchMyPlayer, mutta erottaa verkkovirheen ("ei tiedetä") tilanteesta
+  // "pelaajaa ei ole" ({ ok:true, player:null }). Verkkohäiriö ei saa heittää
+  // kirjautunutta myyjää rekisteröitymisnäkymään.
+  async function fetchMyPlayerSafe(authId) {
+    try {
+      const { data, error } = await withTimeout(
+        client.from('players').select('*').eq('auth_id', authId).maybeSingle(), 'Profiilin haku');
+      if (error) { console.error('fetchMyPlayer error:', error); return { ok: false, error }; }
+      return { ok: true, player: data ? rowToPlayer(data) : null };
+    } catch (e) {
+      console.error('fetchMyPlayer exception:', e);
+      return { ok: false, error: { message: (e && e.message) || 'Verkkovirhe' } };
+    }
   }
 
   window.DB = {
@@ -747,7 +829,7 @@
     fetchHealth,
     setRequestTimeout,
     signUp, signIn, signOut, getSession, onAuthChange, updateOwnPassword,
-    registerPlayer, linkExistingPlayer, fetchUnlinkedPlayers, fetchMyPlayer,
+    registerPlayer, linkExistingPlayer, fetchUnlinkedPlayers, fetchMyPlayer, fetchMyPlayerSafe,
     init,
     subscribe,
     upsertPlayer,
